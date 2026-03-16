@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Job Optimizer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="atmosphere atmosphere-one"></div>
+    <div class="atmosphere atmosphere-two"></div>
+    <div id="flash" class="flash" hidden></div>
+
+    <main class="app-shell">
+      <header class="hero panel">
+        <p class="eyebrow">React Native search copilot</p>
+        <div class="hero-grid">
+          <div>
+            <h1>Find the roles worth your energy.</h1>
+            <p class="hero-copy">
+              Score jobs for React Native fit, build an apply queue, and keep
+              your search focused on work that actually matches your mobile
+              experience.
+            </p>
+          </div>
+          <div id="heroSpotlight" class="hero-spotlight"></div>
+        </div>
+      </header>
+
+      <section class="layout">
+        <div class="stack">
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Your lens</p>
+                <h2>Profile</h2>
+              </div>
+              <p class="muted">Everything below updates scoring live.</p>
+            </div>
+
+            <form id="profileForm" class="form-grid">
+              <label>
+                <span>Headline</span>
+                <input id="profileSummary" name="summary" type="text" />
+              </label>
+              <label>
+                <span>Salary floor (USD)</span>
+                <input
+                  id="profileSalaryFloor"
+                  name="salaryFloor"
+                  type="number"
+                  min="0"
+                  step="5000"
+                />
+              </label>
+              <label>
+                <span>LinkedIn URL</span>
+                <input
+                  id="profileLinkedinUrl"
+                  name="linkedinUrl"
+                  type="url"
+                  placeholder="https://linkedin.com/in/your-id"
+                />
+              </label>
+              <label>
+                <span>GitHub URL</span>
+                <input
+                  id="profileGithubUrl"
+                  name="githubUrl"
+                  type="url"
+                  placeholder="https://github.com/your-id"
+                />
+              </label>
+              <label class="field-span">
+                <span>Portfolio URL</span>
+                <input
+                  id="profilePortfolioUrl"
+                  name="portfolioUrl"
+                  type="url"
+                  placeholder="https://your-site.com"
+                />
+              </label>
+              <label class="field-span">
+                <span>Target titles</span>
+                <textarea
+                  id="profileTargetTitles"
+                  name="targetTitles"
+                  rows="3"
+                ></textarea>
+              </label>
+              <label class="field-span">
+                <span>Core skills</span>
+                <textarea
+                  id="profileCoreSkills"
+                  name="coreSkills"
+                  rows="3"
+                ></textarea>
+              </label>
+              <label class="field-span">
+                <span>Bonus skills</span>
+                <textarea
+                  id="profileBonusSkills"
+                  name="bonusSkills"
+                  rows="3"
+                ></textarea>
+              </label>
+              <label class="field-span">
+                <span>Avoid keywords</span>
+                <textarea
+                  id="profileAvoidKeywords"
+                  name="avoidKeywords"
+                  rows="2"
+                ></textarea>
+              </label>
+              <label class="field-span">
+                <span>Resume text</span>
+                <textarea
+                  id="profileResumeText"
+                  name="resumeText"
+                  rows="10"
+                  placeholder="Paste your resume text here so the app can pull extra skills and job-match signals."
+                ></textarea>
+              </label>
+              <label class="field-span file-field">
+                <span>Import resume text file</span>
+                <input
+                  id="resumeFile"
+                  name="resumeFile"
+                  type="file"
+                  accept=".txt,.md,.text,.pdf,application/pdf"
+                />
+                <small class="muted">
+                  Text, Markdown, and PDF imports work locally. PDF extraction stays on your machine.
+                </small>
+              </label>
+            </form>
+            <div id="profileSignals" class="profile-signals"></div>
+          </section>
+
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Hunt faster</p>
+                <h2>Search Recipes</h2>
+              </div>
+              <p class="muted">Open live searches built from your profile.</p>
+            </div>
+            <div id="searchRecipes" class="recipe-grid"></div>
+          </section>
+
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Real discovery</p>
+                <h2>Import Jobs</h2>
+              </div>
+              <p class="muted">Paste ATS boards or direct job URLs to pull in live roles.</p>
+            </div>
+
+            <form id="importForm" class="form-grid">
+              <label class="field-span">
+                <span>Source URLs</span>
+                <textarea
+                  id="importUrls"
+                  name="sourceUrls"
+                  rows="6"
+                  placeholder="https://boards.greenhouse.io/company&#10;https://jobs.lever.co/company&#10;https://jobs.ashbyhq.com/company&#10;https://boards.greenhouse.io/company/jobs/1234567"
+                ></textarea>
+              </label>
+              <button id="loadStarterJobs" class="button ghost" type="button">
+                Load starter jobs
+              </button>
+              <button class="button primary" type="submit">Import live jobs</button>
+              <button id="clearImportedJobs" class="button ghost" type="button">
+                Clear imported
+              </button>
+            </form>
+
+            <div class="chip-row import-supported">
+              <span class="chip">Greenhouse boards + jobs</span>
+              <span class="chip">Lever boards + jobs</span>
+              <span class="chip">Ashby boards + jobs</span>
+              <span class="chip">Structured job pages</span>
+            </div>
+
+            <div id="importResults" class="import-results"></div>
+          </section>
+
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Bring your own leads</p>
+                <h2>Add Job</h2>
+              </div>
+              <p class="muted">Paste a role and the board scores it instantly.</p>
+            </div>
+
+            <form id="jobForm" class="form-grid">
+              <label>
+                <span>Job title</span>
+                <input name="title" type="text" required />
+              </label>
+              <label>
+                <span>Company</span>
+                <input name="company" type="text" required />
+              </label>
+              <label>
+                <span>Location</span>
+                <input name="location" type="text" placeholder="Remote - US" />
+              </label>
+              <label>
+                <span>Apply URL</span>
+                <input name="url" type="url" placeholder="https://..." />
+              </label>
+              <label>
+                <span>Salary min</span>
+                <input name="salaryMin" type="number" min="0" step="5000" />
+              </label>
+              <label>
+                <span>Salary max</span>
+                <input name="salaryMax" type="number" min="0" step="5000" />
+              </label>
+              <label class="toggle">
+                <input name="remote" type="checkbox" />
+                <span>Remote-friendly</span>
+              </label>
+              <label class="field-span">
+                <span>Description</span>
+                <textarea name="description" rows="7" required></textarea>
+              </label>
+              <button class="button primary" type="submit">Score this job</button>
+            </form>
+          </section>
+        </div>
+
+        <div class="stack board-stack">
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Board health</p>
+                <h2>Snapshot</h2>
+              </div>
+              <button id="exportQueue" class="button ghost" type="button">
+                Export queue
+              </button>
+            </div>
+
+            <div id="metrics" class="metrics-grid"></div>
+            <div class="queue-block">
+              <div class="queue-head">
+                <h3>Apply next</h3>
+                <p class="muted">Highest-value roles worth attention this week.</p>
+              </div>
+              <div id="queueList" class="queue-list"></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Trim the noise</p>
+                <h2>Filters</h2>
+              </div>
+            </div>
+
+            <form id="filtersForm" class="filters-row">
+              <label>
+                <span>Fit</span>
+                <select name="fit">
+                  <option value="all">All fits</option>
+                  <option value="strong">Strong fit</option>
+                  <option value="worth">Worth a look</option>
+                  <option value="stretch">Stretch</option>
+                  <option value="skip">Skip</option>
+                </select>
+              </label>
+              <label>
+                <span>Status</span>
+                <select name="status">
+                  <option value="all">All statuses</option>
+                  <option value="saved">Saved</option>
+                  <option value="apply-next">Apply next</option>
+                  <option value="applied">Applied</option>
+                  <option value="interview">Interview</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </label>
+              <label class="filters-search">
+                <span>Search</span>
+                <input
+                  name="search"
+                  type="search"
+                  placeholder="Company, stack, title..."
+                />
+              </label>
+            </form>
+          </section>
+
+          <div class="board-grid">
+            <section class="panel board-panel">
+              <div class="section-head compact">
+                <div>
+                  <p class="eyebrow">Ranked leads</p>
+                  <h2>Jobs</h2>
+                </div>
+                <p id="jobCount" class="muted"></p>
+              </div>
+              <div id="jobList" class="job-list"></div>
+            </section>
+
+            <section class="panel detail-panel">
+              <div class="section-head compact">
+                <div>
+                  <p class="eyebrow">Tailored view</p>
+                  <h2>Detail</h2>
+                </div>
+              </div>
+              <div id="jobDetail" class="job-detail empty-state">
+                Select a job to see the fit breakdown, custom pitch, and next
+                application move.
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
