@@ -113,6 +113,7 @@ function cacheElements() {
   elements.filtersForm = document.querySelector("#filtersForm");
   elements.flash = document.querySelector("#flash");
   elements.heroSpotlight = document.querySelector("#heroSpotlight");
+  elements.historyList = document.querySelector("#historyList");
   elements.importForm = document.querySelector("#importForm");
   elements.importResults = document.querySelector("#importResults");
   elements.importUrls = document.querySelector("#importUrls");
@@ -160,6 +161,7 @@ function bindEvents() {
   elements.loadStarterJobs.addEventListener("click", handleLoadStarterJobs);
   elements.profileForm.addEventListener("input", handleProfileChange);
   elements.filtersForm.addEventListener("input", handleFilterChange);
+  elements.historyList.addEventListener("click", handleJobSelection);
   elements.jobForm.addEventListener("submit", handleJobSubmit);
   elements.jobList.addEventListener("click", handleJobSelection);
   elements.queueList.addEventListener("click", handleJobSelection);
@@ -362,6 +364,7 @@ function render() {
   renderImportResults();
   renderSearchRecipes();
   renderSnapshot();
+  renderHistoryList();
   renderJobList();
   renderJobDetail();
 }
@@ -599,7 +602,7 @@ async function extractResumeTextFromPdf(file) {
 }
 
 function renderSnapshot() {
-  const jobs = analyzedJobs();
+  const jobs = analyzedJobs().filter((job) => !isReferenceStatus(currentStatus(job.id)));
   const strongFits = jobs.filter((job) => job.fitBucket === "strong").length;
   const remoteFits = jobs.filter((job) => job.remote).length;
   const applyNext = jobs.filter((job) => currentStatus(job.id) === "apply-next").length;
@@ -665,9 +668,40 @@ function renderSnapshot() {
       `;
 }
 
+function renderHistoryList() {
+  const jobs = historyJobs();
+
+  elements.historyList.innerHTML =
+    jobs.length > 0
+      ? jobs
+          .map(
+            (job) => `
+              <button class="queue-item history-item" type="button" data-job-id="${escapeHtml(job.id)}">
+                <div>
+                  <strong>${escapeHtml(job.title)}</strong>
+                  <p>${escapeHtml(job.company)} · ${escapeHtml(job.location)}</p>
+                </div>
+                <div class="history-meta">
+                  <span class="chip">${escapeHtml(currentStatusLabel(job.id))}</span>
+                  <span class="pill ${fitClass(job.fitBucket)}">${escapeHtml(
+                    fitLabel(job.fitBucket)
+                  )} · ${job.score}</span>
+                </div>
+              </button>
+            `
+          )
+          .join("")
+      : `<div class="detail-card"><p class="muted">Jobs marked as Applied or Archived will collect here so you can reference them without crowding the active board.</p></div>`;
+}
+
 function renderJobList() {
   const jobs = filteredJobs();
-  if (!jobs.some((job) => job.id === state.selectedJobId) && jobs[0]) {
+  const referenceCount = historyJobs().length;
+  const preserveSelection = analyzedJobs().some(
+    (job) => job.id === state.selectedJobId && isReferenceStatus(currentStatus(job.id))
+  );
+
+  if (!preserveSelection && !jobs.some((job) => job.id === state.selectedJobId) && jobs[0]) {
     state.selectedJobId = jobs[0].id;
   }
 
@@ -705,7 +739,11 @@ function renderJobList() {
             `
           )
           .join("")
-      : `<div class="empty-state">Nothing matches these filters yet. Loosen the fit filter or add a new lead.</div>`;
+      : `<div class="empty-state">${
+          referenceCount > 0
+            ? "No active leads match these filters right now. Check the Reference Shelf for applied and archived jobs."
+            : "Nothing matches these filters yet. Loosen the fit filter or add a new lead."
+        }</div>`;
 }
 
 function renderJobDetail() {
@@ -775,7 +813,11 @@ function renderJobDetail() {
           </label>
         </div>
         ${
-          isSampleJob(job)
+          isReferenceStatus(currentStatus(job.id))
+            ? `<p class="mini-note">This lead now lives in your Reference Shelf because its status is ${escapeHtml(
+                currentStatusLabel(job.id)
+              )}.</p>`
+            : isSampleJob(job)
             ? `<p class="mini-note">This is starter sample data for scoring and workflow testing. Load live jobs to get real posting URLs.</p>`
             : job.sourceUrl || job.importedFrom
               ? `<p class="mini-note">
@@ -837,7 +879,8 @@ function filteredJobs() {
     const status = currentStatus(job.id);
     const haystack = `${job.title} ${job.company} ${job.description} ${job.skills.join(" ")}`.toLowerCase();
     const matchesFit = state.filters.fit === "all" || job.fitBucket === state.filters.fit;
-    const matchesStatus = state.filters.status === "all" || status === state.filters.status;
+    const matchesStatus =
+      state.filters.status === "all" ? !isReferenceStatus(status) : status === state.filters.status;
     const matchesSearch = !state.filters.search || haystack.includes(state.filters.search);
     return matchesFit && matchesStatus && matchesSearch;
   });
@@ -849,6 +892,22 @@ function buildApplyQueue(jobs) {
     (job) => currentStatus(job.id) === "saved" && (job.fitBucket === "strong" || job.fitBucket === "worth")
   );
   return [...marked, ...suggested].slice(0, 5);
+}
+
+function historyJobs() {
+  const statusOrder = {
+    applied: 0,
+    archived: 1
+  };
+
+  return analyzedJobs()
+    .filter((job) => isReferenceStatus(currentStatus(job.id)))
+    .sort(
+      (left, right) =>
+        (statusOrder[currentStatus(left.id)] || 99) - (statusOrder[currentStatus(right.id)] || 99) ||
+        right.postedAt.localeCompare(left.postedAt) ||
+        right.score - left.score
+    );
 }
 
 function analyzeJob(job, profile) {
@@ -1328,6 +1387,10 @@ function isPlaceholderUrl(value) {
   } catch (error) {
     return false;
   }
+}
+
+function isReferenceStatus(status) {
+  return status === "applied" || status === "archived";
 }
 
 function isPdfFile(file) {

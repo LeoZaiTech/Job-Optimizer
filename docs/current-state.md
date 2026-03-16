@@ -36,6 +36,7 @@ Main interface areas:
 - Import Jobs section for pulling roles from ATS and direct job URLs
 - Add Job form for manually pasting new roles into the board
 - Snapshot section showing metrics and an `Apply next` queue
+- Reference Shelf for jobs moved to `Applied` or `Archived`
 - Filters for fit, status, and text search
 - Ranked job list
 - Detail panel with fit breakdown, risks, pitch bullets, resume focus, and status updates
@@ -89,6 +90,7 @@ This means:
 - pasted jobs survive refreshes in the same browser
 - imported ATS jobs survive refreshes in the same browser
 - status changes survive refreshes in the same browser
+- applied and archived jobs stay referenceable in their own shelf
 
 ### Starter data and live importing
 

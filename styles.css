@@ -287,6 +287,7 @@ textarea {
 }
 
 .recipe-grid,
+.history-list,
 .metrics-grid,
 .queue-list,
 .job-list,
@@ -384,10 +385,20 @@ textarea {
   margin-top: 14px;
 }
 
+.history-list {
+  margin-top: 14px;
+}
+
 .queue-item {
   justify-content: space-between;
   padding: 14px 16px;
   cursor: pointer;
+}
+
+.history-meta {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
 }
 
 .queue-item:hover,

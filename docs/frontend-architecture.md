@@ -36,8 +36,9 @@ flowchart TD
 5. Add Job form
 6. Snapshot and `Apply next` queue
 7. Filters
-8. Ranked Jobs list
-9. Detail panel
+8. Reference Shelf
+9. Ranked Jobs list
+10. Detail panel
 
 The left column is input-oriented. The right side is analysis-oriented.
 
@@ -94,6 +95,7 @@ The app uses a simple full-section rerender pattern. `render()` calls:
 - `renderSearchRecipes()`
 - `renderImportResults()`
 - `renderSnapshot()`
+- `renderHistoryList()`
 - `renderJobList()`
 - `renderJobDetail()`
 
@@ -219,6 +221,7 @@ Each render computes analyzed jobs from raw jobs plus the active profile:
 - change a job's pipeline state
 - persist into `localStorage`
 - affect queue composition and filtering
+- move `Applied` and `Archived` jobs into the Reference Shelf while keeping them selectable
 
 ### Search recipe buttons
 
