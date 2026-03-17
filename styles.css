@@ -354,6 +354,16 @@ textarea {
   font-size: 0.85rem;
 }
 
+.automation-summary .automation-command code {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(20, 108, 98, 0.08);
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.85rem;
+}
+
 .recipe-actions,
 .status-row,
 .job-card-top,
@@ -390,6 +400,14 @@ textarea {
 
 .queue-list {
   margin-top: 14px;
+}
+
+.automation-summary {
+  margin-top: 14px;
+}
+
+.automation-command {
+  margin-top: 12px;
 }
 
 .history-list {

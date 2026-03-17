@@ -35,10 +35,26 @@
                 <p class="eyebrow">Your lens</p>
                 <h2>Profile</h2>
               </div>
-              <p class="muted">Everything below updates scoring live.</p>
+              <p class="muted">Everything below updates scoring live and powers application automation.</p>
             </div>
 
             <form id="profileForm" class="form-grid">
+              <label>
+                <span>Full name</span>
+                <input id="profileFullName" name="fullName" type="text" />
+              </label>
+              <label>
+                <span>Email</span>
+                <input id="profileEmail" name="email" type="email" />
+              </label>
+              <label>
+                <span>Phone</span>
+                <input id="profilePhone" name="phone" type="tel" />
+              </label>
+              <label>
+                <span>Current location</span>
+                <input id="profileCurrentLocation" name="currentLocation" type="text" placeholder="New York, NY" />
+              </label>
               <label>
                 <span>Headline</span>
                 <input id="profileSummary" name="summary" type="text" />
@@ -78,6 +94,33 @@
                   name="portfolioUrl"
                   type="url"
                   placeholder="https://your-site.com"
+                />
+              </label>
+              <label>
+                <span>Work authorization</span>
+                <input
+                  id="profileWorkAuthorization"
+                  name="workAuthorization"
+                  type="text"
+                  placeholder="Authorized to work in the U.S."
+                />
+              </label>
+              <label>
+                <span>Sponsorship</span>
+                <input
+                  id="profileSponsorship"
+                  name="sponsorship"
+                  type="text"
+                  placeholder="No sponsorship needed"
+                />
+              </label>
+              <label class="field-span">
+                <span>Resume file path</span>
+                <input
+                  id="profileResumeFilePath"
+                  name="resumeFilePath"
+                  type="text"
+                  placeholder="/Users/you/Documents/resume.pdf"
                 />
               </label>
               <label class="field-span">
@@ -187,6 +230,9 @@
               <button id="loadStarterJobs" class="button ghost" type="button">
                 Load starter jobs
               </button>
+              <button id="loadGreenhouseJobs" class="button ghost" type="button">
+                Load Greenhouse jobs
+              </button>
               <button class="button primary" type="submit">Import live jobs</button>
               <button id="clearImportedJobs" class="button ghost" type="button">
                 Clear imported
@@ -262,7 +308,7 @@
                 <h2>Snapshot</h2>
               </div>
               <button id="exportQueue" class="button ghost" type="button">
-                Export queue
+                Export application kit
               </button>
             </div>
 
@@ -273,6 +319,7 @@
                 <p class="muted">Highest-value roles worth attention this week.</p>
               </div>
               <div id="queueList" class="queue-list"></div>
+              <div id="automationSummary" class="automation-summary"></div>
             </div>
           </section>
 
@@ -312,6 +359,15 @@
                   <option value="applied">Applied</option>
                   <option value="interview">Interview</option>
                   <option value="archived">Archived</option>
+                </select>
+              </label>
+              <label>
+                <span>Source</span>
+                <select name="source">
+                  <option value="all">All sources</option>
+                  <option value="greenhouse">Greenhouse</option>
+                  <option value="lever">Lever</option>
+                  <option value="ashby">Ashby</option>
                 </select>
               </label>
               <label class="filters-search">

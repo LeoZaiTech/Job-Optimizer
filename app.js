@@ -5,7 +5,11 @@ import {
   normalizeExcludedLocations,
   normalizeRemoteMode
 } from "./lib/discovery-preferences.mjs";
-import { CURATED_DISCOVERY_BATCHES, STARTER_SOURCE_URLS } from "./lib/discovery-sources.mjs";
+import {
+  CURATED_DISCOVERY_BATCHES,
+  GREENHOUSE_AUTOFILL_SOURCE_URLS,
+  STARTER_SOURCE_URLS
+} from "./lib/discovery-sources.mjs";
 
 const STORAGE_KEYS = {
   customJobs: "job-optimizer-custom-jobs",
@@ -16,11 +20,17 @@ const STORAGE_KEYS = {
 };
 
 const DEFAULT_PROFILE = {
+  currentLocation: "",
+  email: "",
+  fullName: "",
+  phone: "",
   summary: "React Native engineer focused on polished cross-platform product work.",
   linkedinUrl: "",
   githubUrl: "",
   portfolioUrl: "",
+  resumeFilePath: "",
   salaryFloor: 150000,
+  sponsorship: "",
   targetTitles:
     "React Native Engineer, Senior React Native Engineer, Mobile Engineer, Expo Developer, Product Engineer",
   coreSkills:
@@ -29,7 +39,8 @@ const DEFAULT_PROFILE = {
     "GraphQL, Jest, Detox, Fastlane, Native Modules, CI/CD, App Store, Play Store, Performance",
   avoidKeywords:
     "onsite five days, onsite four days, no remote, swift only, kotlin only, native rewrite",
-  resumeText: ""
+  resumeText: "",
+  workAuthorization: ""
 };
 
 const RESUME_SKILL_LIBRARY = [
@@ -98,6 +109,7 @@ const state = {
   filters: {
     fit: "all",
     search: "",
+    source: "all",
     status: "all",
     view: "active"
   }
@@ -122,6 +134,7 @@ async function initializeApp() {
 }
 
 function cacheElements() {
+  elements.automationSummary = document.querySelector("#automationSummary");
   elements.autoPullToggle = document.querySelector("#autoPullToggle");
   elements.clearImportedJobs = document.querySelector("#clearImportedJobs");
   elements.exportQueue = document.querySelector("#exportQueue");
@@ -137,6 +150,7 @@ function cacheElements() {
   elements.jobDetail = document.querySelector("#jobDetail");
   elements.jobForm = document.querySelector("#jobForm");
   elements.jobList = document.querySelector("#jobList");
+  elements.loadGreenhouseJobs = document.querySelector("#loadGreenhouseJobs");
   elements.loadStarterJobs = document.querySelector("#loadStarterJobs");
   elements.metrics = document.querySelector("#metrics");
   elements.pullMoreJobs = document.querySelector("#pullMoreJobs");
@@ -186,6 +200,7 @@ function bindEvents() {
   elements.autoPullToggle.addEventListener("change", handleAutoPullToggle);
   elements.clearImportedJobs.addEventListener("click", handleClearImportedJobs);
   elements.importForm.addEventListener("submit", handleImportSubmit);
+  elements.loadGreenhouseJobs.addEventListener("click", handleLoadGreenhouseJobs);
   elements.loadStarterJobs.addEventListener("click", handleLoadStarterJobs);
   elements.excludeLocationsInput.addEventListener("input", handleExcludeLocationsChange);
   elements.remoteModeSelect.addEventListener("change", handleRemoteModeChange);
@@ -206,16 +221,23 @@ function bindEvents() {
 function handleProfileChange() {
   const formData = new FormData(elements.profileForm);
   state.profile = {
+    currentLocation: String(formData.get("currentLocation") || "").trim(),
+    email: String(formData.get("email") || "").trim(),
+    fullName: String(formData.get("fullName") || "").trim(),
+    phone: String(formData.get("phone") || "").trim(),
     summary: String(formData.get("summary") || "").trim(),
     linkedinUrl: String(formData.get("linkedinUrl") || "").trim(),
     githubUrl: String(formData.get("githubUrl") || "").trim(),
     portfolioUrl: String(formData.get("portfolioUrl") || "").trim(),
+    resumeFilePath: String(formData.get("resumeFilePath") || "").trim(),
     salaryFloor: Number(formData.get("salaryFloor") || 0),
+    sponsorship: String(formData.get("sponsorship") || "").trim(),
     targetTitles: String(formData.get("targetTitles") || "").trim(),
     coreSkills: String(formData.get("coreSkills") || "").trim(),
     bonusSkills: String(formData.get("bonusSkills") || "").trim(),
     avoidKeywords: String(formData.get("avoidKeywords") || "").trim(),
-    resumeText: String(formData.get("resumeText") || "").trim()
+    resumeText: String(formData.get("resumeText") || "").trim(),
+    workAuthorization: String(formData.get("workAuthorization") || "").trim()
   };
   writeJson(STORAGE_KEYS.profile, state.profile);
   render();
@@ -291,6 +313,32 @@ async function handleLoadStarterJobs() {
   });
 }
 
+async function handleLoadGreenhouseJobs() {
+  const result = await importLiveJobs(GREENHOUSE_AUTOFILL_SOURCE_URLS, {
+    loadingMessage: "Loading Greenhouse jobs for autofill testing...",
+    rememberSources: false,
+    suppressResultFlash: true
+  });
+
+  if (!result) {
+    return;
+  }
+
+  state.filters.source = "greenhouse";
+  state.filters.status = "all";
+  state.filters.view = "all";
+  state.filters.search = "";
+  render();
+
+  showFlash(
+    result.importedCount > 0
+      ? `Imported ${result.importedCount} Greenhouse-focused job${
+          result.importedCount === 1 ? "" : "s"
+        } and switched the board to Greenhouse view.`
+      : "Greenhouse import finished. Switched the board to Greenhouse view so you can inspect the current matches."
+  );
+}
+
 async function handlePullMoreJobs() {
   await importNextDiscoveryBatch({
     loadingMessage: "Pulling more jobs from the next discovery batch..."
@@ -318,6 +366,7 @@ function handleFilterChange() {
   state.filters = {
     fit: String(formData.get("fit") || "all"),
     search: String(formData.get("search") || "").trim().toLowerCase(),
+    source: normalizeSourceFilter(formData.get("source")),
     status: String(formData.get("status") || "all"),
     view: normalizeBoardView(formData.get("view"))
   };
@@ -439,18 +488,26 @@ function hydrateForms() {
   elements.excludeLocationsInput.value = state.discovery.excludeLocations;
   elements.remoteModeSelect.value = state.discovery.remoteMode;
   elements.filtersForm.view.value = normalizeBoardView(state.filters.view);
+  elements.profileForm.currentLocation.value = state.profile.currentLocation;
+  elements.profileForm.email.value = state.profile.email;
+  elements.profileForm.fullName.value = state.profile.fullName;
+  elements.profileForm.phone.value = state.profile.phone;
   elements.profileForm.summary.value = state.profile.summary;
   elements.profileForm.linkedinUrl.value = state.profile.linkedinUrl;
   elements.profileForm.githubUrl.value = state.profile.githubUrl;
   elements.profileForm.portfolioUrl.value = state.profile.portfolioUrl;
+  elements.profileForm.resumeFilePath.value = state.profile.resumeFilePath;
   elements.profileForm.salaryFloor.value = state.profile.salaryFloor;
+  elements.profileForm.sponsorship.value = state.profile.sponsorship;
   elements.profileForm.targetTitles.value = state.profile.targetTitles;
   elements.profileForm.coreSkills.value = state.profile.coreSkills;
   elements.profileForm.bonusSkills.value = state.profile.bonusSkills;
   elements.profileForm.avoidKeywords.value = state.profile.avoidKeywords;
   elements.profileForm.resumeText.value = state.profile.resumeText;
+  elements.profileForm.workAuthorization.value = state.profile.workAuthorization;
 
   elements.filtersForm.fit.value = state.filters.fit;
+  elements.filtersForm.source.value = normalizeSourceFilter(state.filters.source);
   elements.filtersForm.status.value = state.filters.status;
   elements.filtersForm.search.value = state.filters.search;
 }
@@ -738,6 +795,8 @@ function renderSnapshot() {
           .join("")
       : `<div class="detail-card"><p class="muted">Mark interesting roles as "Apply next" to move them out of Ranked Leads and into this queue.</p></div>`;
 
+  elements.automationSummary.innerHTML = buildAutomationSummary(applyQueue);
+
   const spotlightJob = applyQueue[0] || jobs[0];
   elements.heroSpotlight.innerHTML = spotlightJob
     ? `
@@ -1012,9 +1071,10 @@ function filteredJobs() {
     const status = currentStatus(job.id);
     const haystack = `${job.title} ${job.company} ${job.description} ${job.skills.join(" ")}`.toLowerCase();
     const matchesFit = state.filters.fit === "all" || job.fitBucket === state.filters.fit;
+    const matchesSource = state.filters.source === "all" || job.source === state.filters.source;
     const matchesStatus = state.filters.status === "all" || status === state.filters.status;
     const matchesSearch = !state.filters.search || haystack.includes(state.filters.search);
-    return matchesFit && matchesStatus && matchesSearch;
+    return matchesFit && matchesSource && matchesStatus && matchesSearch;
   });
 }
 
@@ -1028,6 +1088,12 @@ function normalizeBoardView(value) {
     : "active";
 }
 
+function normalizeSourceFilter(value) {
+  return ["all", "greenhouse", "lever", "ashby"].includes(String(value || "").trim())
+    ? String(value).trim()
+    : "all";
+}
+
 function boardStats() {
   return {
     activeCount: activeLeadJobs().length,
@@ -1039,9 +1105,14 @@ function boardStats() {
 
 function emptyBoardMessage(referenceCount) {
   const normalizedView = normalizeBoardView(state.filters.view);
+  const sourceFilter = normalizeSourceFilter(state.filters.source);
 
   if (state.filters.status === "apply-next") {
     return "No Apply next roles match these filters right now.";
+  }
+
+  if (sourceFilter !== "all") {
+    return `No ${humanizeLabel(sourceFilter)} roles match these filters right now. Try All sources or pull a fresh batch.`;
   }
 
   if (normalizedView === "all") {
@@ -1264,36 +1335,231 @@ function createResumeFocus(job, coreHits, bonusHits, profile, resumeOnlyHits) {
   return focus.slice(0, 4);
 }
 
-function exportQueue() {
-  const jobs = buildApplyQueue(analyzedJobs()).map((job) => ({
+function buildApplicationKit() {
+  const queuedJobs = buildApplyQueue(analyzedJobs());
+  const candidate = buildCandidateProfile(state.profile);
+
+  return {
+    automation: {
+      generatedBy: "job-optimizer",
+      generatedFromStatus: "apply-next",
+      reviewMode: "pause-before-submit",
+      supportedAdapters: ["greenhouse"],
+      unsupportedAdapters: ["lever", "ashby", "generic"]
+    },
+    candidate,
+    exportedAt: new Date().toISOString(),
+    jobs: queuedJobs.map((job) => buildApplicationKitJob(job, candidate))
+  };
+}
+
+function buildApplicationKitJob(job, candidate) {
+  const automation = applicationAutomationForJob(job);
+
+  return {
+    automation,
     company: job.company,
+    concerns: job.concerns,
     fit: fitLabel(job.fitBucket),
+    id: job.id,
     location: job.location,
     pitch: job.pitch,
+    resumeFocus: job.resumeFocus,
     score: job.score,
+    source: job.source,
+    sourceLabel: job.sourceLabel,
     status: currentStatusLabel(job.id),
     title: job.title,
-    url: job.url || ""
-  }));
+    url: job.url || "",
+    autofillDefaults: {
+      currentLocation: candidate.currentLocation,
+      email: candidate.email,
+      firstName: candidate.firstName,
+      fullName: candidate.fullName,
+      githubUrl: candidate.githubUrl,
+      lastName: candidate.lastName,
+      linkedinUrl: candidate.linkedinUrl,
+      phone: candidate.phone,
+      portfolioUrl: candidate.portfolioUrl,
+      resumeFilePath: candidate.resumeFilePath,
+      sponsorship: candidate.sponsorship,
+      workAuthorization: candidate.workAuthorization
+    }
+  };
+}
 
-  const payload = JSON.stringify(
-    {
-      exportedAt: new Date().toISOString(),
-      profile: exportProfileSnapshot(state.profile),
-      jobs
-    },
-    null,
-    2
-  );
+function buildCandidateProfile(profile) {
+  const { firstName, lastName } = splitFullName(profile.fullName);
+
+  return {
+    currentLocation: profile.currentLocation,
+    email: profile.email,
+    firstName,
+    fullName: profile.fullName,
+    githubUrl: normalizeUrl(profile.githubUrl),
+    lastName,
+    linkedinUrl: normalizeUrl(profile.linkedinUrl),
+    phone: profile.phone,
+    portfolioUrl: normalizeUrl(profile.portfolioUrl),
+    resumeFilePath: profile.resumeFilePath,
+    resumeSignals: getResumeSignals(profile).skills,
+    sponsorship: profile.sponsorship,
+    summary: profile.summary,
+    workAuthorization: profile.workAuthorization
+  };
+}
+
+function splitFullName(value) {
+  const parts = String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (parts.length === 0) {
+    return { firstName: "", lastName: "" };
+  }
+
+  if (parts.length === 1) {
+    return { firstName: parts[0], lastName: "" };
+  }
+
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(" ")
+  };
+}
+
+function applicationAutomationForJob(job) {
+  if (job.source === "greenhouse" || /greenhouse/i.test(job.url || "")) {
+    return {
+      adapter: "greenhouse",
+      supported: true
+    };
+  }
+
+  if (job.source === "lever" || /lever\.co/i.test(job.url || "")) {
+    return {
+      adapter: "lever",
+      supported: false
+    };
+  }
+
+  if (job.source === "ashby" || /ashbyhq/i.test(job.url || "")) {
+    return {
+      adapter: "ashby",
+      supported: false
+    };
+  }
+
+  return {
+    adapter: "generic",
+    supported: false
+  };
+}
+
+function buildAutomationSummary(applyQueue) {
+  const adapterBreakdown = applyQueue.map((job) => ({
+    automation: applicationAutomationForJob(job),
+    job
+  }));
+  const readyJobs = adapterBreakdown.filter(({ automation }) => automation.supported);
+  const greenhouseReadyCount = readyJobs.filter(({ automation }) => automation.adapter === "greenhouse").length;
+  const unsupportedCount = adapterBreakdown.length - readyJobs.length;
+  const missingBasics = missingAutomationFields(state.profile, [
+    ["fullName", "full name"],
+    ["email", "email"]
+  ]);
+  const missingRecommended = missingAutomationFields(state.profile, [
+    ["phone", "phone"],
+    ["currentLocation", "current location"],
+    ["workAuthorization", "work authorization"],
+    ["sponsorship", "sponsorship note"],
+    ["resumeFilePath", "resume file path"]
+  ]);
+  const adapterChips = summarizeAutomationAdapters(adapterBreakdown);
+
+  return `
+    <div class="profile-signal-grid">
+      <article class="detail-card">
+        <h4>Automation readiness</h4>
+        <p class="mini-note">${
+          applyQueue.length > 0
+            ? `${greenhouseReadyCount} Apply next role${
+                greenhouseReadyCount === 1 ? "" : "s"
+              } can use guided Greenhouse autofill today.`
+            : "Move roles into Apply next to prepare an application kit."
+        }</p>
+        <p class="mini-note">${
+          unsupportedCount > 0
+            ? `${unsupportedCount} queued role${
+                unsupportedCount === 1 ? "" : "s"
+              } still need manual review until Lever or Ashby adapters land.`
+            : "Everything in the current queue is on the supported path."
+        }</p>
+        ${
+          adapterChips.length > 0
+            ? `<div class="chip-row">
+                ${adapterChips.map((chip) => `<span class="chip">${escapeHtml(chip)}</span>`).join("")}
+              </div>`
+            : ""
+        }
+        ${
+          missingBasics.length > 0
+            ? `<p class="mini-note">Add ${escapeHtml(missingBasics.join(", "))} before running autofill.</p>`
+            : `<p class="mini-note">Your basic autofill identity fields are in place.</p>`
+        }
+        ${
+          missingRecommended.length > 0
+            ? `<p class="mini-note">Recommended next: ${escapeHtml(
+                missingRecommended.join(", ")
+              )}. These help with uploads and common screening fields.</p>`
+            : `<p class="mini-note">Your recommended autofill fields are filled in too.</p>`
+        }
+      </article>
+
+      <article class="detail-card">
+        <h4>Greenhouse workflow</h4>
+        <p class="mini-note">Export your application kit, then run the local review-first filler. It opens the form, fills common fields, uploads your resume, and pauses before submit.</p>
+        <div class="automation-command">
+          <code>npm run autofill:greenhouse -- /path/to/job-optimizer-application-kit.json --all</code>
+        </div>
+        <p class="mini-note">Use <code>--job=&lt;job-id&gt;</code> if you want to review one Greenhouse role at a time.</p>
+      </article>
+    </div>
+  `;
+}
+
+function missingAutomationFields(profile, entries) {
+  return entries
+    .filter(([key]) => !String(profile[key] || "").trim())
+    .map(([, label]) => label);
+}
+
+function summarizeAutomationAdapters(adapterBreakdown) {
+  const counts = new Map();
+
+  for (const { automation } of adapterBreakdown) {
+    const label = automation.supported
+      ? `${humanizeLabel(automation.adapter)} ready`
+      : `${humanizeLabel(automation.adapter)} review`;
+    counts.set(label, (counts.get(label) || 0) + 1);
+  }
+
+  return [...counts.entries()].map(([label, count]) => `${label} · ${count}`);
+}
+
+function exportQueue() {
+  const applicationKit = buildApplicationKit();
+  const payload = JSON.stringify(applicationKit, null, 2);
   const blob = new Blob([payload], { type: "application/json" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = "job-optimizer-queue.json";
+  link.download = "job-optimizer-application-kit.json";
   document.body.appendChild(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(link.href);
-  showFlash("Apply queue exported.");
+  showFlash("Application kit exported from your Apply next queue.");
 }
 
 function allJobs() {
@@ -1492,15 +1758,22 @@ function publicProfileLinks(profile) {
 
 function exportProfileSnapshot(profile) {
   return {
+    currentLocation: profile.currentLocation,
+    email: profile.email,
+    fullName: profile.fullName,
+    phone: profile.phone,
     summary: profile.summary,
     linkedinUrl: normalizeUrl(profile.linkedinUrl),
     githubUrl: normalizeUrl(profile.githubUrl),
     portfolioUrl: normalizeUrl(profile.portfolioUrl),
+    resumeFilePath: profile.resumeFilePath,
     salaryFloor: profile.salaryFloor,
+    sponsorship: profile.sponsorship,
     targetTitles: splitList(profile.targetTitles),
     coreSkills: splitList(profile.coreSkills),
     bonusSkills: splitList(profile.bonusSkills),
-    resumeSignals: getResumeSignals(profile).skills
+    resumeSignals: getResumeSignals(profile).skills,
+    workAuthorization: profile.workAuthorization
   };
 }
 
@@ -1713,6 +1986,7 @@ function syncImportControls() {
   elements.clearImportedJobs.disabled = disabled;
   elements.excludeLocationsInput.disabled = disabled;
   elements.importUrls.disabled = disabled;
+  elements.loadGreenhouseJobs.disabled = disabled;
   elements.loadStarterJobs.disabled = disabled;
   elements.pullMoreJobs.disabled = disabled;
   elements.remoteModeSelect.disabled = disabled;

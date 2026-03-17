@@ -34,10 +34,14 @@ Main interface areas:
 - Resume import supporting text, Markdown, and PDF files
 - Search Recipes section that generates live search links from the profile
 - Import Jobs section for pulling roles from ATS and direct job URLs
+- One-click `Load Greenhouse jobs` action for surfacing autofill-compatible leads
 - Add Job form for manually pasting new roles into the board
 - Snapshot section showing metrics and an `Apply next` queue for leads you explicitly move out of the ranked board
+- Application-profile fields for autofill identity data such as name, email, phone, current location, and resume file path
+- Snapshot automation summary showing readiness, supported queue counts, and the next Greenhouse command to run
 - Reference Shelf for jobs moved to `Applied` or `Archived`
 - Filters for board view, fit, status, and text search
+- Filters for board view, fit, source, status, and text search
 - Ranked job list
 - Detail panel with fit breakdown, risks, pitch bullets, resume focus, and status updates
 
@@ -70,6 +74,7 @@ The output of scoring powers:
 - the `Apply next` queue for manually queued roles
 - the ranked list order
 - the detail panel guidance
+- the exported application kit used by automation scripts
 
 ### Persistence
 
@@ -148,10 +153,13 @@ There is now also a scheduled-friendly sync script in `scripts/sync-jobs.mjs` th
 
 The Snapshot panel includes an export action that downloads the current apply queue as JSON.
 
+The export now produces a richer application kit for `Apply next` jobs, including candidate autofill data, job fit context, and adapter hints for local automation runners.
+Greenhouse roles are marked as supported today, while Lever, Ashby, and generic roles stay on the manual-review path until those adapters are added.
+
 ## Technical decisions made so far
 
 - Plain HTML, CSS, and JavaScript instead of a framework
-- Zero runtime dependencies
+- Minimal runtime dependencies, with Playwright added for local browser autofill
 - Local-first persistence via `localStorage`
 - JSON file as the current job source of truth
 - Small custom Node server instead of external dev tooling
@@ -159,6 +167,7 @@ The Snapshot panel includes an export action that downloads the current apply qu
 - PDF import uses local macOS PDFKit extraction through the app server
 - Live job import uses ATS JSON APIs when available and falls back to structured job-page parsing
 - Multi-source imports now fan out in parallel with request timeouts so one slow board does not stall the full pull
+- The first automation runner is a local Greenhouse autofill script that works from an exported application kit, supports single-job or `--all` runs, and pauses before submit
 
 These choices were made to keep the first version easy to run, easy to inspect, and quick to evolve.
 

@@ -7,6 +7,7 @@ Job Optimizer is a zero-dependency local dashboard for narrowing your job search
 - import resume files from `.txt`, `.md`, and `.pdf`
 - import live jobs from ATS and job URLs
 - keep an "apply next" queue
+- export an application kit from the `Apply next` queue
 - save custom jobs by pasting descriptions
 - generate search recipes for LinkedIn, Greenhouse, and Lever
 - export a shortlist to JSON
@@ -21,6 +22,9 @@ Job Optimizer is a zero-dependency local dashboard for narrowing your job search
 Auto-applying across job boards is possible, but it is brittle and usually lower quality than a guided workflow. Different sites have different flows, anti-bot checks, and custom questions. This first version builds the stable part first: finding, ranking, and preparing strong applications.
 
 If you want, the next step can be a browser automation layer that opens high-score roles, fills common fields, and pauses for review before submit.
+
+That first automation layer now starts with an exported application kit plus a Greenhouse autofill runner in review mode.
+The Snapshot panel now also shows how many `Apply next` roles are Greenhouse-ready, which profile fields are still missing, and the exact command to run next.
 
 ## Run it
 
@@ -41,12 +45,14 @@ From the app UI, use the `Import Jobs` panel and paste one or more URLs:
 - direct job pages with structured `JobPosting` data
 
 Imported jobs are normalized, deduped, scored, and stored locally in the browser alongside your custom jobs. The UI also includes a `Load starter jobs` action that pulls in a vetted starter set of current live mobile roles.
+There is also a `Load Greenhouse jobs` action that pulls a live Greenhouse-focused batch for autofill testing and pairs well with the new board `Source` filter.
 
 You can also use `Pull more jobs` to rotate through broader curated discovery batches, while the textarea keeps your exact import sources handy. `Auto-pull when active leads hit zero` uses that same rotating discovery flow. The built-in discovery pool now spans 40+ ATS sources instead of a tiny starter loop.
 
 The import panel now includes a location mode, with `Remote preferred` as the default discovery setting. In that mode, discovery keeps remote roles first and only allows a very small fallback of ambiguous location listings.
 
 You can also add `Exclude locations` in the import panel to drop roles from places you do not want in the board, such as `India, Hyderabad, Bengaluru`.
+On the board side, the Filters panel now includes `Source`, so you can isolate Greenhouse roles before moving them into `Apply next`.
 
 ## Refresh `data/jobs.json` from live sources
 
@@ -83,6 +89,45 @@ npm run sync:jobs -- --remote-mode=preferred --exclude-locations=india,hyderabad
 
 The sync script will not overwrite `data/jobs.json` with an empty result set, which makes it much safer to run on a schedule.
 
+## Start application automation
+
+1. Fill in your application-profile fields in the dashboard:
+- full name
+- email
+- phone
+- current location
+- work authorization
+- sponsorship note
+- resume file path
+
+2. Move target roles into `Apply next`.
+
+3. Click `Export application kit` in the Snapshot panel.
+
+4. Run the Greenhouse review-mode autofill script:
+
+```bash
+npm run autofill:greenhouse -- /path/to/job-optimizer-application-kit.json
+```
+
+Optional:
+
+```bash
+npm run autofill:greenhouse -- /path/to/job-optimizer-application-kit.json --job=<job-id>
+```
+
+```bash
+npm run autofill:greenhouse -- /path/to/job-optimizer-application-kit.json --all
+```
+
+Notes:
+
+- This starter runner targets Greenhouse jobs only.
+- Lever and Ashby jobs are still exported into the application kit, but they stay on the manual-review path for now.
+- It fills common fields and uploads your resume when `resumeFilePath` is set.
+- It pauses before submit so you can review the form manually.
+- You will need `playwright` plus a Chromium browser install for the runner to work locally.
+
 ## Project structure
 
 - `index.html`: app shell
@@ -93,6 +138,7 @@ The sync script will not overwrite `data/jobs.json` with an empty result set, wh
 - `lib/discovery-preferences.mjs`: shared remote-mode filtering helpers
 - `lib/discovery-sources.mjs`: starter and curated discovery source lists
 - `lib/job-discovery.mjs`: ATS and job-page import + normalization
+- `scripts/autofill-greenhouse.mjs`: review-first Greenhouse application filler
 - `scripts/fetch-jobs.mjs`: CLI importer for board and job URLs
 - `scripts/sync-jobs.mjs`: scheduled-friendly discovery sync for ongoing refreshes
 - `server.mjs`: tiny static server plus local import and PDF extraction endpoints
