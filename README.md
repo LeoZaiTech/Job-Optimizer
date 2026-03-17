@@ -99,6 +99,7 @@ The sync script will not overwrite `data/jobs.json` with an empty result set, wh
 - work authorization
 - sponsorship note
 - resume file path
+- common application answers such as pronouns, source, employment preference, start timing, and ZIP code
 
 2. Move target roles into `Apply next`.
 
@@ -124,9 +125,35 @@ Notes:
 
 - This starter runner targets Greenhouse jobs only.
 - Lever and Ashby jobs are still exported into the application kit, but they stay on the manual-review path for now.
-- It fills common fields and uploads your resume when `resumeFilePath` is set.
+- It fills common fields, repeatable Greenhouse screening questions, and uploads your resume when `resumeFilePath` is set.
 - It pauses before submit so you can review the form manually.
+- It writes a `*-greenhouse-report.json` file listing `fieldsFilled`, `fieldsMissing`, and any still-unmatched custom questions.
+- Some Greenhouse comboboxes, especially location autocomplete fields, may still require manual review if the site does not return a selectable option.
 - You will need `playwright` plus a Chromium browser install for the runner to work locally.
+
+## Run a headless Greenhouse smoke test
+
+```bash
+npm run smoke:greenhouse
+```
+
+This command:
+
+- finds the newest exported `job-optimizer-application-kit*.json` in `data`, `Downloads`, or `/tmp`
+- runs the Greenhouse autofill script in headless review mode
+- writes a summary to `data/greenhouse-smoke-report.json`
+
+Useful options:
+
+```bash
+npm run smoke:greenhouse -- --job=greenhouse-fueledcareers-5134378008
+```
+
+```bash
+npm run smoke:greenhouse -- --strict --allow-missing=location: value did not stick
+```
+
+By default the smoke summary ignores `full name: no matching input found`, since many Greenhouse forms split name into first and last fields.
 
 ## Project structure
 

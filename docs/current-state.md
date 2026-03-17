@@ -38,6 +38,7 @@ Main interface areas:
 - Add Job form for manually pasting new roles into the board
 - Snapshot section showing metrics and an `Apply next` queue for leads you explicitly move out of the ranked board
 - Application-profile fields for autofill identity data such as name, email, phone, current location, and resume file path
+- Application answers section for repeat screening answers such as pronouns, source, employment preference, agency experience, start timing, and ZIP code
 - Snapshot automation summary showing readiness, supported queue counts, and the next Greenhouse command to run
 - Reference Shelf for jobs moved to `Applied` or `Archived`
 - Filters for board view, fit, status, and text search
@@ -155,6 +156,7 @@ The Snapshot panel includes an export action that downloads the current apply qu
 
 The export now produces a richer application kit for `Apply next` jobs, including candidate autofill data, job fit context, and adapter hints for local automation runners.
 Greenhouse roles are marked as supported today, while Lever, Ashby, and generic roles stay on the manual-review path until those adapters are added.
+The candidate payload now also includes a small answer bank so Greenhouse autofill can handle standard screening questions without guessing every time.
 
 ## Technical decisions made so far
 
@@ -168,12 +170,15 @@ Greenhouse roles are marked as supported today, while Lever, Ashby, and generic 
 - Live job import uses ATS JSON APIs when available and falls back to structured job-page parsing
 - Multi-source imports now fan out in parallel with request timeouts so one slow board does not stall the full pull
 - The first automation runner is a local Greenhouse autofill script that works from an exported application kit, supports single-job or `--all` runs, and pauses before submit
+- The Greenhouse runner now fills common screening questions when matching saved answers exist and writes a per-run report with filled, missing, and unmatched items
+- There is now also a headless Greenhouse smoke-test command that reuses the newest exported application kit and writes a summarized health report into `data/greenhouse-smoke-report.json`
 
 These choices were made to keep the first version easy to run, easy to inspect, and quick to evolve.
 
 ## Known limitations
 
 - No true auto-apply flow yet
+- Some Greenhouse fields, especially location autocomplete widgets, may still require manual confirmation when the site does not return a selectable option
 - No scraping or authenticated job-board integrations
 - No resume-to-job gap analysis yet
 - PDF import currently relies on local macOS support

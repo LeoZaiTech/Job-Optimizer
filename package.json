@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "autofill:greenhouse": "node scripts/autofill-greenhouse.mjs",
+    "smoke:greenhouse": "node scripts/smoke-greenhouse.mjs",
     "sync:jobs": "node scripts/sync-jobs.mjs",
     "start": "node server.mjs",
     "fetch:jobs": "node scripts/fetch-jobs.mjs"

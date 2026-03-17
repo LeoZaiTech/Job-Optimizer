@@ -20,6 +20,15 @@ const STORAGE_KEYS = {
 };
 
 const DEFAULT_PROFILE = {
+  answerAgencyExperience: "",
+  answerAgencyName: "",
+  answerEmploymentPreference: "",
+  answerHearAbout: "",
+  answerHearAboutDetail: "",
+  answerPronouns: "",
+  answerStartAvailability: "",
+  answerUpcomingCommitments: "",
+  answerUsZipCode: "",
   currentLocation: "",
   email: "",
   fullName: "",
@@ -221,26 +230,40 @@ function bindEvents() {
 function handleProfileChange() {
   const formData = new FormData(elements.profileForm);
   state.profile = {
-    currentLocation: String(formData.get("currentLocation") || "").trim(),
-    email: String(formData.get("email") || "").trim(),
-    fullName: String(formData.get("fullName") || "").trim(),
-    phone: String(formData.get("phone") || "").trim(),
-    summary: String(formData.get("summary") || "").trim(),
-    linkedinUrl: String(formData.get("linkedinUrl") || "").trim(),
-    githubUrl: String(formData.get("githubUrl") || "").trim(),
-    portfolioUrl: String(formData.get("portfolioUrl") || "").trim(),
-    resumeFilePath: String(formData.get("resumeFilePath") || "").trim(),
+    answerAgencyExperience: readProfileValue(formData, "answerAgencyExperience", { trim: true }),
+    answerAgencyName: readProfileValue(formData, "answerAgencyName"),
+    answerEmploymentPreference: readProfileValue(formData, "answerEmploymentPreference", { trim: true }),
+    answerHearAbout: readProfileValue(formData, "answerHearAbout", { trim: true }),
+    answerHearAboutDetail: readProfileValue(formData, "answerHearAboutDetail"),
+    answerPronouns: readProfileValue(formData, "answerPronouns"),
+    answerStartAvailability: readProfileValue(formData, "answerStartAvailability"),
+    answerUpcomingCommitments: readProfileValue(formData, "answerUpcomingCommitments"),
+    answerUsZipCode: readProfileValue(formData, "answerUsZipCode", { trim: true }),
+    currentLocation: readProfileValue(formData, "currentLocation"),
+    email: readProfileValue(formData, "email", { trim: true }),
+    fullName: readProfileValue(formData, "fullName"),
+    phone: readProfileValue(formData, "phone", { trim: true }),
+    summary: readProfileValue(formData, "summary"),
+    linkedinUrl: readProfileValue(formData, "linkedinUrl", { trim: true }),
+    githubUrl: readProfileValue(formData, "githubUrl", { trim: true }),
+    portfolioUrl: readProfileValue(formData, "portfolioUrl", { trim: true }),
+    resumeFilePath: readProfileValue(formData, "resumeFilePath"),
     salaryFloor: Number(formData.get("salaryFloor") || 0),
-    sponsorship: String(formData.get("sponsorship") || "").trim(),
-    targetTitles: String(formData.get("targetTitles") || "").trim(),
-    coreSkills: String(formData.get("coreSkills") || "").trim(),
-    bonusSkills: String(formData.get("bonusSkills") || "").trim(),
-    avoidKeywords: String(formData.get("avoidKeywords") || "").trim(),
-    resumeText: String(formData.get("resumeText") || "").trim(),
-    workAuthorization: String(formData.get("workAuthorization") || "").trim()
+    sponsorship: readProfileValue(formData, "sponsorship"),
+    targetTitles: readProfileValue(formData, "targetTitles"),
+    coreSkills: readProfileValue(formData, "coreSkills"),
+    bonusSkills: readProfileValue(formData, "bonusSkills"),
+    avoidKeywords: readProfileValue(formData, "avoidKeywords"),
+    resumeText: readProfileValue(formData, "resumeText"),
+    workAuthorization: readProfileValue(formData, "workAuthorization")
   };
   writeJson(STORAGE_KEYS.profile, state.profile);
   render();
+}
+
+function readProfileValue(formData, key, options = {}) {
+  const value = String(formData.get(key) || "");
+  return options.trim ? value.trim() : value;
 }
 
 function handleAutoPullToggle(event) {
@@ -488,6 +511,15 @@ function hydrateForms() {
   elements.excludeLocationsInput.value = state.discovery.excludeLocations;
   elements.remoteModeSelect.value = state.discovery.remoteMode;
   elements.filtersForm.view.value = normalizeBoardView(state.filters.view);
+  elements.profileForm.answerAgencyExperience.value = state.profile.answerAgencyExperience;
+  elements.profileForm.answerAgencyName.value = state.profile.answerAgencyName;
+  elements.profileForm.answerEmploymentPreference.value = state.profile.answerEmploymentPreference;
+  elements.profileForm.answerHearAbout.value = state.profile.answerHearAbout;
+  elements.profileForm.answerHearAboutDetail.value = state.profile.answerHearAboutDetail;
+  elements.profileForm.answerPronouns.value = state.profile.answerPronouns;
+  elements.profileForm.answerStartAvailability.value = state.profile.answerStartAvailability;
+  elements.profileForm.answerUpcomingCommitments.value = state.profile.answerUpcomingCommitments;
+  elements.profileForm.answerUsZipCode.value = state.profile.answerUsZipCode;
   elements.profileForm.currentLocation.value = state.profile.currentLocation;
   elements.profileForm.email.value = state.profile.email;
   elements.profileForm.fullName.value = state.profile.fullName;
@@ -1338,6 +1370,7 @@ function createResumeFocus(job, coreHits, bonusHits, profile, resumeOnlyHits) {
 function buildApplicationKit() {
   const queuedJobs = buildApplyQueue(analyzedJobs());
   const candidate = buildCandidateProfile(state.profile);
+  const warnings = automationProfileWarnings(state.profile);
 
   return {
     automation: {
@@ -1345,7 +1378,8 @@ function buildApplicationKit() {
       generatedFromStatus: "apply-next",
       reviewMode: "pause-before-submit",
       supportedAdapters: ["greenhouse"],
-      unsupportedAdapters: ["lever", "ashby", "generic"]
+      unsupportedAdapters: ["lever", "ashby", "generic"],
+      warnings
     },
     candidate,
     exportedAt: new Date().toISOString(),
@@ -1372,6 +1406,7 @@ function buildApplicationKitJob(job, candidate) {
     title: job.title,
     url: job.url || "",
     autofillDefaults: {
+      applicationAnswers: candidate.applicationAnswers,
       currentLocation: candidate.currentLocation,
       email: candidate.email,
       firstName: candidate.firstName,
@@ -1392,6 +1427,17 @@ function buildCandidateProfile(profile) {
   const { firstName, lastName } = splitFullName(profile.fullName);
 
   return {
+    applicationAnswers: {
+      agencyExperience: profile.answerAgencyExperience,
+      agencyName: profile.answerAgencyName,
+      employmentPreference: profile.answerEmploymentPreference,
+      hearAbout: profile.answerHearAbout,
+      hearAboutDetail: profile.answerHearAboutDetail,
+      pronouns: profile.answerPronouns,
+      startAvailability: profile.answerStartAvailability,
+      upcomingCommitments: profile.answerUpcomingCommitments,
+      usZipCode: profile.answerUsZipCode
+    },
     currentLocation: profile.currentLocation,
     email: profile.email,
     firstName,
@@ -1401,7 +1447,7 @@ function buildCandidateProfile(profile) {
     linkedinUrl: normalizeUrl(profile.linkedinUrl),
     phone: profile.phone,
     portfolioUrl: normalizeUrl(profile.portfolioUrl),
-    resumeFilePath: profile.resumeFilePath,
+    resumeFilePath: sanitizeResumeFilePath(profile.resumeFilePath),
     resumeSignals: getResumeSignals(profile).skills,
     sponsorship: profile.sponsorship,
     summary: profile.summary,
@@ -1477,6 +1523,7 @@ function buildAutomationSummary(applyQueue) {
     ["resumeFilePath", "resume file path"]
   ]);
   const adapterChips = summarizeAutomationAdapters(adapterBreakdown);
+  const warnings = automationProfileWarnings(state.profile);
 
   return `
     <div class="profile-signal-grid">
@@ -1514,6 +1561,13 @@ function buildAutomationSummary(applyQueue) {
                 missingRecommended.join(", ")
               )}. These help with uploads and common screening fields.</p>`
             : `<p class="mini-note">Your recommended autofill fields are filled in too.</p>`
+        }
+        ${
+          warnings.length > 0
+            ? `<p class="mini-note">Automation warning${warnings.length === 1 ? "" : "s"}: ${escapeHtml(
+                warnings.join(" ")
+              )}</p>`
+            : ""
         }
       </article>
 
@@ -1559,7 +1613,39 @@ function exportQueue() {
   link.click();
   link.remove();
   URL.revokeObjectURL(link.href);
-  showFlash("Application kit exported from your Apply next queue.");
+  showFlash(
+    applicationKit.automation.warnings.length > 0
+      ? "Application kit exported. Check the automation warnings in Snapshot before running autofill."
+      : "Application kit exported from your Apply next queue."
+  );
+}
+
+function automationProfileWarnings(profile) {
+  const warnings = [];
+
+  if (String(profile.fullName || "").trim().split(/\s+/).filter(Boolean).length < 2) {
+    warnings.push("Full name looks incomplete.");
+  }
+
+  if (!looksLikeEmail(profile.email)) {
+    warnings.push("Email does not look valid.");
+  }
+
+  if (String(profile.resumeFilePath || "").trim() && sanitizeResumeFilePath(profile.resumeFilePath) !== String(profile.resumeFilePath || "").trim()) {
+    warnings.push("Resume file path had wrapped quotes; the export will strip them.");
+  }
+
+  return warnings;
+}
+
+function looksLikeEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
+function sanitizeResumeFilePath(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^['"]+|['"]+$/g, "");
 }
 
 function allJobs() {
@@ -1758,6 +1844,15 @@ function publicProfileLinks(profile) {
 
 function exportProfileSnapshot(profile) {
   return {
+    answerAgencyExperience: profile.answerAgencyExperience,
+    answerAgencyName: profile.answerAgencyName,
+    answerEmploymentPreference: profile.answerEmploymentPreference,
+    answerHearAbout: profile.answerHearAbout,
+    answerHearAboutDetail: profile.answerHearAboutDetail,
+    answerPronouns: profile.answerPronouns,
+    answerStartAvailability: profile.answerStartAvailability,
+    answerUpcomingCommitments: profile.answerUpcomingCommitments,
+    answerUsZipCode: profile.answerUsZipCode,
     currentLocation: profile.currentLocation,
     email: profile.email,
     fullName: profile.fullName,

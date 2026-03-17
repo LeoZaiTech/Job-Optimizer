@@ -123,6 +123,88 @@
                   placeholder="/Users/you/Documents/resume.pdf"
                 />
               </label>
+              <div class="field-span answer-bank-card">
+                <div class="detail-card">
+                  <h4>Application answers</h4>
+                  <p class="mini-note">
+                    Save repeat answers here so Greenhouse autofill can handle common screening questions without guessing.
+                  </p>
+                  <div class="form-grid answer-grid">
+                    <label>
+                      <span>Pronouns</span>
+                      <input id="profileAnswerPronouns" name="answerPronouns" type="text" placeholder="He / him" />
+                    </label>
+                    <label>
+                      <span>How you heard</span>
+                      <select id="profileAnswerHearAbout" name="answerHearAbout">
+                        <option value="">Leave blank</option>
+                        <option value="job-board">Job board</option>
+                        <option value="linkedin">LinkedIn</option>
+                        <option value="referral">Employee referral</option>
+                        <option value="company-website">Company website</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </label>
+                    <label class="field-span">
+                      <span>How you heard detail</span>
+                      <input
+                        id="profileAnswerHearAboutDetail"
+                        name="answerHearAboutDetail"
+                        type="text"
+                        placeholder="LinkedIn Jobs, Job Optimizer, referral name, or N/A"
+                      />
+                    </label>
+                    <label>
+                      <span>Employment preference</span>
+                      <select id="profileAnswerEmploymentPreference" name="answerEmploymentPreference">
+                        <option value="">Leave blank</option>
+                        <option value="full-time">Permanent / Full-time</option>
+                        <option value="contract">Freelance / Contracting</option>
+                        <option value="either">Open to either</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Agency experience</span>
+                      <select id="profileAnswerAgencyExperience" name="answerAgencyExperience">
+                        <option value="">Leave blank</option>
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                      </select>
+                    </label>
+                    <label class="field-span">
+                      <span>Agency name</span>
+                      <input
+                        id="profileAnswerAgencyName"
+                        name="answerAgencyName"
+                        type="text"
+                        placeholder="Only if your answer above is yes"
+                      />
+                    </label>
+                    <label>
+                      <span>Start availability</span>
+                      <input
+                        id="profileAnswerStartAvailability"
+                        name="answerStartAvailability"
+                        type="text"
+                        placeholder="Immediately"
+                      />
+                    </label>
+                    <label>
+                      <span>US ZIP code</span>
+                      <input id="profileAnswerUsZipCode" name="answerUsZipCode" type="text" placeholder="29403" />
+                    </label>
+                    <label class="field-span">
+                      <span>Upcoming commitments</span>
+                      <textarea
+                        id="profileAnswerUpcomingCommitments"
+                        name="answerUpcomingCommitments"
+                        rows="3"
+                        placeholder="N/A or brief note about travel, notice period, or availability"
+                      ></textarea>
+                    </label>
+                  </div>
+                </div>
+              </div>
               <label class="field-span">
                 <span>Target titles</span>
                 <textarea

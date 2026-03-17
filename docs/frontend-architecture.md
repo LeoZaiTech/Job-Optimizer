@@ -80,6 +80,7 @@ The left column is input-oriented. The right side is analysis-oriented.
 - `discovery.excludeLocations`: comma-separated location phrases that should be filtered out of the board and new imports
 - `profile`: restored from `localStorage` with defaults
 - The profile now includes autofill fields like full name, email, phone, current location, work authorization, sponsorship notes, and resume file path.
+- The profile now also includes an answer bank for repeat application responses such as pronouns, source, employment preference, agency experience, start timing, upcoming commitments, and ZIP code.
 - The profile now includes public links and pasted resume text.
 - `statuses`: restored from `localStorage`
 - `importReport`: runtime summary of the latest import attempt
@@ -251,6 +252,7 @@ Each render computes analyzed jobs from raw jobs plus the active profile:
 
 - serializes the current `Apply next` queue into an application kit JSON payload
 - includes candidate autofill defaults, fit context, and adapter hints per job
+- includes saved application-answer defaults for repeat Greenhouse screening questions
 - uses adapter hints to distinguish Greenhouse-ready jobs from Lever, Ashby, and generic manual-review jobs
 - downloads it as `job-optimizer-application-kit.json`
 
@@ -259,6 +261,7 @@ Each render computes analyzed jobs from raw jobs plus the active profile:
 - derives a small readiness view from the `Apply next` queue and the profile form
 - shows how many queued roles are Greenhouse-ready today
 - shows which basic and recommended autofill fields are still missing
+- surfaces warning text when profile data looks malformed for automation, such as an incomplete name or invalid email
 - surfaces the exact CLI command for the current Greenhouse runner, including `--all` support
 
 ## Persistence model
@@ -298,7 +301,8 @@ There is no application backend yet. The only Node-side logic today is:
 - `lib/discovery-preferences.mjs` holds the shared location-mode filtering logic
 - `lib/job-discovery.mjs` holds source detection, ATS fetches, normalization, and relevance filtering
 - ATS pulls now fan out across sources in parallel and use request timeouts
-- `scripts/autofill-greenhouse.mjs` reads an exported application kit, fills common Greenhouse fields, uploads a resume when possible, supports `--job=` or `--all`, and pauses before submit
+- `scripts/autofill-greenhouse.mjs` reads an exported application kit, fills common Greenhouse fields, applies saved answers to standard screening questions, uploads a resume when possible, writes a `*-greenhouse-report.json` summary, supports `--job=` or `--all`, and pauses before submit
+- `scripts/smoke-greenhouse.mjs` finds the newest application kit, runs a headless Greenhouse autofill pass, normalizes known expected misses, and writes `data/greenhouse-smoke-report.json`
 - `scripts/fetch-jobs.mjs` is the CLI wrapper around that same importer logic
 - `scripts/sync-jobs.mjs` refreshes the full discovery pool into `data/jobs.json` for scheduled automation
 

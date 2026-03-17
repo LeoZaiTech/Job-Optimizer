@@ -218,6 +218,14 @@ a {
   line-height: 1.5;
 }
 
+.answer-bank-card {
+  display: block;
+}
+
+.answer-grid {
+  margin-top: 14px;
+}
+
 label {
   display: grid;
   gap: 8px;
