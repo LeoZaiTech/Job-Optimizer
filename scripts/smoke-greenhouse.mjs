@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
-import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
+import { runGreenhouseAutofill } from "./autofill-greenhouse.mjs";
 
-const SCRIPT_DIR = path.dirname(new URL(import.meta.url).pathname);
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(SCRIPT_DIR, "..");
 const DEFAULT_SUMMARY_PATH = path.join(PROJECT_ROOT, "data", "greenhouse-smoke-report.json");
 const DEFAULT_IGNORED_MISSING = ["full name: no matching input found"];
@@ -31,16 +32,14 @@ async function main() {
     throw new Error("No application kit was provided and no recent kit could be found in the workspace or Downloads.");
   }
 
-  const autofillArgs = [path.join("scripts", "autofill-greenhouse.mjs"), kitPath, "--headless"];
-  if (all) {
-    autofillArgs.push("--all");
-  } else if (jobId) {
-    autofillArgs.push(`--job=${jobId}`);
-  }
-
-  await runNodeCommand(autofillArgs);
-
-  const rawReport = JSON.parse(await fs.readFile(buildReportPath(kitPath), "utf8"));
+  const result = await runGreenhouseAutofill(kitPath, {
+    headless: true,
+    jobId,
+    reviewOnly: true,
+    runAll: all
+  });
+  const reportPath = result?.reportPath || buildReportPath(kitPath);
+  const rawReport = JSON.parse(await fs.readFile(reportPath, "utf8"));
   const summary = buildSummary(rawReport, { ignoredMissing, kitPath, strict });
 
   await fs.mkdir(path.dirname(summaryPath), { recursive: true });
@@ -97,13 +96,15 @@ function buildSummary(report, options) {
   const jobs = Array.isArray(report.jobs) ? report.jobs : [];
 
   const normalizedJobs = jobs.map((job) => {
+    const blockingIssues = Array.isArray(job.blockingIssues) ? job.blockingIssues : [];
     const fieldsMissing = Array.isArray(job.fieldsMissing) ? job.fieldsMissing : [];
     const unmatchedQuestions = Array.isArray(job.unmatchedQuestions) ? job.unmatchedQuestions : [];
     const ignored = fieldsMissing.filter((item) => options.ignoredMissing.includes(item));
     const remainingMissing = fieldsMissing.filter((item) => !options.ignoredMissing.includes(item));
-    const remainingIssues = [...remainingMissing, ...unmatchedQuestions];
+    const remainingIssues = blockingIssues.length > 0 ? blockingIssues : [...remainingMissing, ...unmatchedQuestions];
 
     return {
+      blockingIssues,
       company: job.company || "",
       fieldsFilled: Array.isArray(job.fieldsFilled) ? job.fieldsFilled : [],
       id: job.id || "",
@@ -141,8 +142,14 @@ function printSummary(summary, summaryPath) {
 
   for (const job of summary.jobs) {
     const filledCount = job.fieldsFilled.length;
-    const remainingCount = job.remainingMissing.length + job.unmatchedQuestions.length;
+    const remainingIssues = job.blockingIssues.length > 0 ? job.blockingIssues : [...job.remainingMissing, ...job.unmatchedQuestions];
+    const remainingCount = remainingIssues.length;
     console.log(`- ${job.title} @ ${job.company}: ${filledCount} filled, ${remainingCount} remaining issue(s).`);
+
+    if (job.blockingIssues.length > 0) {
+      console.log(`  blocking: ${job.blockingIssues.join(" | ")}`);
+      continue;
+    }
 
     if (job.remainingMissing.length > 0) {
       console.log(`  missing: ${job.remainingMissing.join(" | ")}`);
@@ -171,38 +178,4 @@ function readListOption(argv, prefix) {
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
-}
-
-async function runNodeCommand(args) {
-  const nodeBinary = await resolveNodeBinary();
-
-  await new Promise((resolve, reject) => {
-    const child = spawn(nodeBinary, args, {
-      cwd: PROJECT_ROOT,
-      stdio: "inherit"
-    });
-
-    child.on("error", reject);
-    child.on("exit", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-
-      reject(new Error(`Greenhouse autofill exited with code ${code ?? "unknown"}.`));
-    });
-  });
-}
-
-async function resolveNodeBinary() {
-  if (process.execPath) {
-    try {
-      await fs.access(process.execPath);
-      return process.execPath;
-    } catch (error) {
-      // Fall back to PATH lookup below.
-    }
-  }
-
-  return "node";
 }

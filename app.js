@@ -25,6 +25,7 @@ const DEFAULT_PROFILE = {
   answerEmploymentPreference: "",
   answerHearAbout: "",
   answerHearAboutDetail: "",
+  answerPhoneCountry: "",
   answerPronouns: "",
   answerStartAvailability: "",
   answerUpcomingCommitments: "",
@@ -235,6 +236,7 @@ function handleProfileChange() {
     answerEmploymentPreference: readProfileValue(formData, "answerEmploymentPreference", { trim: true }),
     answerHearAbout: readProfileValue(formData, "answerHearAbout", { trim: true }),
     answerHearAboutDetail: readProfileValue(formData, "answerHearAboutDetail"),
+    answerPhoneCountry: readProfileValue(formData, "answerPhoneCountry"),
     answerPronouns: readProfileValue(formData, "answerPronouns"),
     answerStartAvailability: readProfileValue(formData, "answerStartAvailability"),
     answerUpcomingCommitments: readProfileValue(formData, "answerUpcomingCommitments"),
@@ -516,6 +518,7 @@ function hydrateForms() {
   elements.profileForm.answerEmploymentPreference.value = state.profile.answerEmploymentPreference;
   elements.profileForm.answerHearAbout.value = state.profile.answerHearAbout;
   elements.profileForm.answerHearAboutDetail.value = state.profile.answerHearAboutDetail;
+  elements.profileForm.answerPhoneCountry.value = state.profile.answerPhoneCountry;
   elements.profileForm.answerPronouns.value = state.profile.answerPronouns;
   elements.profileForm.answerStartAvailability.value = state.profile.answerStartAvailability;
   elements.profileForm.answerUpcomingCommitments.value = state.profile.answerUpcomingCommitments;
@@ -1415,6 +1418,7 @@ function buildApplicationKitJob(job, candidate) {
       lastName: candidate.lastName,
       linkedinUrl: candidate.linkedinUrl,
       phone: candidate.phone,
+      phoneCountry: candidate.phoneCountry,
       portfolioUrl: candidate.portfolioUrl,
       resumeFilePath: candidate.resumeFilePath,
       sponsorship: candidate.sponsorship,
@@ -1425,17 +1429,19 @@ function buildApplicationKitJob(job, candidate) {
 
 function buildCandidateProfile(profile) {
   const { firstName, lastName } = splitFullName(profile.fullName);
+  const phoneCountry = normalizePhoneCountry(profile);
+  const hearAbout = String(profile.answerHearAbout || "").trim();
 
   return {
     applicationAnswers: {
       agencyExperience: profile.answerAgencyExperience,
       agencyName: profile.answerAgencyName,
       employmentPreference: profile.answerEmploymentPreference,
-      hearAbout: profile.answerHearAbout,
-      hearAboutDetail: profile.answerHearAboutDetail,
+      hearAbout,
+      hearAboutDetail: deriveHearAboutDetail(hearAbout, profile.answerHearAboutDetail),
       pronouns: profile.answerPronouns,
       startAvailability: profile.answerStartAvailability,
-      upcomingCommitments: profile.answerUpcomingCommitments,
+      upcomingCommitments: defaultUpcomingCommitments(profile.answerUpcomingCommitments),
       usZipCode: profile.answerUsZipCode
     },
     currentLocation: profile.currentLocation,
@@ -1446,6 +1452,7 @@ function buildCandidateProfile(profile) {
     lastName,
     linkedinUrl: normalizeUrl(profile.linkedinUrl),
     phone: profile.phone,
+    phoneCountry,
     portfolioUrl: normalizeUrl(profile.portfolioUrl),
     resumeFilePath: sanitizeResumeFilePath(profile.resumeFilePath),
     resumeSignals: getResumeSignals(profile).skills,
@@ -1622,6 +1629,9 @@ function exportQueue() {
 
 function automationProfileWarnings(profile) {
   const warnings = [];
+  const startAvailability = String(profile.answerStartAvailability || "").trim();
+  const usZipCode = String(profile.answerUsZipCode || "").trim();
+  const inferredPhoneCountry = normalizePhoneCountry(profile);
 
   if (String(profile.fullName || "").trim().split(/\s+/).filter(Boolean).length < 2) {
     warnings.push("Full name looks incomplete.");
@@ -1635,6 +1645,18 @@ function automationProfileWarnings(profile) {
     warnings.push("Resume file path had wrapped quotes; the export will strip them.");
   }
 
+  if (!startAvailability) {
+    warnings.push("Start availability is blank; some Greenhouse forms require it.");
+  }
+
+  if (profileLooksUsBased(profile) && !usZipCode) {
+    warnings.push("US ZIP code is blank; US-based Greenhouse forms may ask for it.");
+  }
+
+  if (String(profile.phone || "").trim() && !inferredPhoneCountry) {
+    warnings.push("Phone country could not be inferred; add it if Greenhouse leaves the country code blank.");
+  }
+
   return warnings;
 }
 
@@ -1646,6 +1668,51 @@ function sanitizeResumeFilePath(value) {
   return String(value || "")
     .trim()
     .replace(/^['"]+|['"]+$/g, "");
+}
+
+function deriveHearAboutDetail(hearAbout, detail) {
+  const trimmedDetail = String(detail || "").trim();
+  if (trimmedDetail) {
+    return trimmedDetail;
+  }
+
+  if (hearAbout === "linkedin") {
+    return "LinkedIn";
+  }
+
+  return "";
+}
+
+function defaultUpcomingCommitments(value) {
+  const trimmed = String(value || "").trim();
+  return trimmed || "N/A";
+}
+
+function profileLooksUsBased(profile) {
+  const currentLocation = String(profile.currentLocation || "").toLowerCase();
+  const workAuthorization = String(profile.workAuthorization || "").toLowerCase();
+  const sponsorship = String(profile.sponsorship || "").toLowerCase();
+
+  return (
+    /\b(us|u\.s\.|united states|charleston|ny|ca|tx|fl|ga|sc|nc)\b/.test(currentLocation) ||
+    /\bus\b|united states|uscitizen|authorized to work in the u\.s\./.test(workAuthorization) ||
+    sponsorship.includes("u.s.")
+  );
+}
+
+function normalizePhoneCountry(profile) {
+  const explicit = String(profile.answerPhoneCountry || "").trim();
+  if (explicit) {
+    return explicit;
+  }
+
+  const digits = String(profile.phone || "").replace(/\D/g, "");
+
+  if (profileLooksUsBased(profile) && digits.length >= 10) {
+    return "United States +1";
+  }
+
+  return "";
 }
 
 function allJobs() {
@@ -1849,6 +1916,7 @@ function exportProfileSnapshot(profile) {
     answerEmploymentPreference: profile.answerEmploymentPreference,
     answerHearAbout: profile.answerHearAbout,
     answerHearAboutDetail: profile.answerHearAboutDetail,
+    answerPhoneCountry: profile.answerPhoneCountry,
     answerPronouns: profile.answerPronouns,
     answerStartAvailability: profile.answerStartAvailability,
     answerUpcomingCommitments: profile.answerUpcomingCommitments,

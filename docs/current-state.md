@@ -172,6 +172,7 @@ The candidate payload now also includes a small answer bank so Greenhouse autofi
 - The first automation runner is a local Greenhouse autofill script that works from an exported application kit, supports single-job or `--all` runs, and pauses before submit
 - The Greenhouse runner now fills common screening questions when matching saved answers exist and writes a per-run report with filled, missing, and unmatched items
 - There is now also a headless Greenhouse smoke-test command that reuses the newest exported application kit and writes a summarized health report into `data/greenhouse-smoke-report.json`
+- The Greenhouse runner now has a guarded `--submit` mode that refuses to click submit when required blockers or CAPTCHA are still present, and records those blockers in the report
 
 These choices were made to keep the first version easy to run, easy to inspect, and quick to evolve.
 

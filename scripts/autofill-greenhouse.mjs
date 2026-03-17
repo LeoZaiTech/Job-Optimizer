@@ -1,5 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const args = process.argv.slice(2);
 const kitPathArg = args.find((arg) => !arg.startsWith("--"));
@@ -7,40 +8,60 @@ const jobId = readOptionValue(args, "--job=");
 const runAll = args.includes("--all");
 const headless = args.includes("--headless");
 const reviewOnly = !args.includes("--submit");
+const IGNORED_SUBMIT_MISSING = ["full name: no matching input found"];
+const isDirectRun = process.argv[1] ? path.resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
 
-if (!kitPathArg) {
+if (isDirectRun && !kitPathArg) {
   console.error(
     "Usage: node scripts/autofill-greenhouse.mjs <application-kit.json> [--job=<job-id>] [--all] [--headless]"
   );
   process.exitCode = 1;
-} else {
-  await main(path.resolve(process.cwd(), kitPathArg));
+} else if (isDirectRun) {
+  await runGreenhouseAutofill(path.resolve(process.cwd(), kitPathArg), {
+    headless,
+    jobId,
+    reviewOnly,
+    runAll
+  });
 }
 
-async function main(kitPath) {
+export async function runGreenhouseAutofill(kitPath, options = {}) {
+  const {
+    headless: runHeadless = false,
+    jobId: selectedJobId = "",
+    reviewOnly: runInReviewOnly = true,
+    runAll: shouldRunAll = false
+  } = options;
   const kit = JSON.parse(await readFile(kitPath, "utf8"));
   const jobs = Array.isArray(kit.jobs) ? kit.jobs : [];
+  const sharedCandidate = kit.candidate || {};
   const greenhouseJobs = jobs.filter(
     (job) => job?.automation?.adapter === "greenhouse" && job?.automation?.supported && job?.url
   );
-  const selectedJobs = jobId
-    ? greenhouseJobs.filter((job) => job.id === jobId)
-    : runAll
+  const selectedJobs = selectedJobId
+    ? greenhouseJobs.filter((job) => job.id === selectedJobId)
+    : shouldRunAll
       ? greenhouseJobs
       : greenhouseJobs.slice(0, 1);
 
   if (selectedJobs.length === 0) {
     console.error(
-      jobId
-        ? `No Greenhouse job matched --job=${jobId} in that application kit.`
+      selectedJobId
+        ? `No Greenhouse job matched --job=${selectedJobId} in that application kit.`
         : "No Greenhouse jobs were found in that application kit."
     );
     process.exitCode = 1;
     return;
   }
 
+  console.log(
+    runInReviewOnly
+      ? "Greenhouse autofill is running in review-only mode. Add --submit if you want it to click Submit application."
+      : "Greenhouse autofill is running in submit-enabled mode."
+  );
+
   const playwright = await loadPlaywright();
-  const browser = await playwright.chromium.launch({ headless });
+  const browser = await playwright.chromium.launch({ headless: runHeadless });
   const context = await browser.newContext();
   const report = [];
 
@@ -48,11 +69,14 @@ async function main(kitPath) {
     for (const job of selectedJobs) {
       const page = await context.newPage();
       const jobReport = {
+        blockingIssues: [],
         company: job.company,
+        confirmationUrl: "",
         fieldsFilled: [],
         fieldsMissing: [],
         id: job.id,
-        mode: reviewOnly ? "review-only" : "submit-enabled",
+        mode: runInReviewOnly ? "review-only" : "submit-enabled",
+        readyToSubmit: false,
         submitted: false,
         title: job.title,
         unmatchedQuestions: [],
@@ -60,15 +84,22 @@ async function main(kitPath) {
       };
 
       try {
+        const candidate = mergeAutofillCandidate(sharedCandidate, job.autofillDefaults || {});
         await page.goto(job.url, { waitUntil: "domcontentloaded" });
         await openGreenhouseApplySection(page);
-        await fillGreenhouseApplication(page, job, jobReport);
+        await fillGreenhouseApplication(page, candidate, jobReport);
+        jobReport.blockingIssues = await collectGreenhouseSubmitBlockers(page, jobReport);
+        jobReport.readyToSubmit = jobReport.blockingIssues.length === 0;
 
-        if (reviewOnly) {
+        if (runInReviewOnly) {
           await focusSubmitButton(page);
           console.log(`Prepared ${job.title} at ${job.company}. Review the form in the open browser and submit manually if it looks good.`);
+        } else if (!jobReport.readyToSubmit) {
+          console.log(
+            `Blocked submit for ${job.title} at ${job.company}. Remaining issues: ${jobReport.blockingIssues.join(" | ")}`
+          );
         } else {
-          console.log(`Submit mode is not enabled in this starter workflow yet. Review ${job.title} manually.`);
+          await submitGreenhouseApplication(page, jobReport, { canPromptAfterCaptcha: !runHeadless });
         }
       } catch (error) {
         jobReport.error = error instanceof Error ? error.message : "Greenhouse autofill failed.";
@@ -82,10 +113,12 @@ async function main(kitPath) {
     await writeFile(reportPath, JSON.stringify({ generatedAt: new Date().toISOString(), jobs: report }, null, 2));
     console.log(`Wrote Greenhouse autofill report to ${reportPath}`);
 
-    if (!headless) {
+    if (!runHeadless) {
       console.log("Browser left open for review. Press Enter here when you are ready to close it.");
       await waitForEnter();
     }
+
+    return { kitPath, report, reportPath };
   } finally {
     await browser.close();
   }
@@ -120,8 +153,8 @@ async function openGreenhouseApplySection(page) {
   }
 }
 
-async function fillGreenhouseApplication(page, job, jobReport) {
-  const candidate = normalizeCandidate(job.autofillDefaults || {});
+async function fillGreenhouseApplication(page, candidateDefaults, jobReport) {
+  const candidate = normalizeCandidate(candidateDefaults || {});
 
   await fillGreenhouseField(
     page,
@@ -177,6 +210,18 @@ async function fillGreenhouseApplication(page, job, jobReport) {
       value: candidate.email
     },
     jobReport
+  );
+
+  await fillGreenhouseField(
+    page,
+    {
+      labels: ["country"],
+      name: "phone country",
+      selectors: ["#country", "input[aria-label='Country']"],
+      value: candidate.phoneCountry
+    },
+    jobReport,
+    { optional: true }
   );
 
   await fillGreenhouseField(
@@ -268,7 +313,11 @@ async function fillGreenhouseApplication(page, job, jobReport) {
   }
 
   await fillGreenhouseSavedAnswers(page, candidate.applicationAnswers, jobReport);
-  jobReport.unmatchedQuestions = await collectUnmatchedGreenhouseQuestions(page);
+  await page.waitForTimeout(300);
+  jobReport.unmatchedQuestions = reconcileGreenhouseQuestions(
+    await collectUnmatchedGreenhouseQuestions(page),
+    jobReport.fieldsFilled
+  );
 }
 
 async function fillGreenhouseField(page, field, jobReport, options = {}) {
@@ -441,6 +490,10 @@ async function fillGreenhouseComboboxQuestion(page, labelPattern, answerOptions,
       await page.waitForTimeout(250);
 
       const selectedOption = await selectGreenhouseComboboxOption(page, input, option, { allowFirstFallback: false });
+      if (selectedOption) {
+        await page.waitForTimeout(200);
+        await blurGreenhouseInput(page, input);
+      }
       if (selectedOption || (await greenhouseFieldMatchesValue(input, option))) {
         pushUnique(jobReport.fieldsFilled, fieldName);
         return;
@@ -537,35 +590,41 @@ async function commitGreenhouseTextValue(page, input, value, options = {}) {
 }
 
 async function commitGreenhouseComboboxValue(page, input, value, options = {}) {
-  const attempts = [
-    async () => {
-      await input.click();
-      await input.fill(value);
-    },
-    async () => {
-      await clearGreenhouseInput(input);
-      await input.type(value, { delay: 24 });
-    }
-  ];
+  const candidateValues = buildGreenhouseComboboxSearchTerms(value, options.matchMode);
 
-  for (const attempt of attempts) {
-    try {
-      await attempt();
-      await page.waitForTimeout(300);
+  for (const candidateValue of candidateValues) {
+    const attempts = [
+      async () => {
+        await input.click();
+        await input.fill(candidateValue);
+      },
+      async () => {
+        await clearGreenhouseInput(input);
+        await input.type(candidateValue, { delay: 24 });
+      }
+    ];
 
-      const selectedOption = await selectGreenhouseComboboxOption(page, input, value, {
-        allowFirstFallback: false,
-        matchMode: options.matchMode
-      });
-      if (!selectedOption) {
+    for (const attempt of attempts) {
+      try {
+        await attempt();
+        await page.waitForTimeout(300);
+
+        const selectedOption = await selectGreenhouseComboboxOption(page, input, candidateValue, {
+          allowFirstFallback: false,
+          matchMode: options.matchMode
+        });
         await blurGreenhouseInput(page, input);
-      }
 
-      if (await greenhouseFieldMatchesValue(input, value, options)) {
-        return true;
+        if (selectedOption && matchesExpectedValue(selectedOption, value, options.matchMode)) {
+          return true;
+        }
+
+        if (await greenhouseFieldMatchesValue(input, value, options)) {
+          return true;
+        }
+      } catch (error) {
+        // Try the next combobox strategy.
       }
-    } catch (error) {
-      // Try the next combobox strategy.
     }
   }
 
@@ -668,12 +727,7 @@ async function findGreenhouseQuestionInput(page, labelPattern) {
 async function collectUnmatchedGreenhouseQuestions(page) {
   return page.evaluate(() => {
     const unanswered = [];
-    const questionsRoot = document.querySelector(".application--questions");
-    if (!questionsRoot) {
-      return unanswered;
-    }
-
-    const labels = Array.from(questionsRoot.querySelectorAll("label[id$='-label'][for^='question_']"));
+    const labels = Array.from(document.querySelectorAll("label[id$='-label'][for^='question_']"));
     for (const label of labels) {
       const question = (label.textContent || "").replace(/\*/g, "").trim();
       const forId = label.getAttribute("for");
@@ -686,15 +740,40 @@ async function collectUnmatchedGreenhouseQuestions(page) {
         continue;
       }
 
+      const required =
+        field.getAttribute("aria-required") === "true" ||
+        field.hasAttribute("required") ||
+        (label.textContent || "").includes("*");
+      if (!required) {
+        continue;
+      }
+
       let answered = false;
       if (field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement) {
         if ((field.getAttribute("role") || "") === "combobox") {
-          const wrapperText = `${field.parentElement?.parentElement?.textContent || ""} ${
-            field.parentElement?.textContent || ""
-          }`
+          const control = field.closest("[class*='select__control']");
+          const container =
+            field.closest("[class*='select__container']") ||
+            control?.parentElement ||
+            field.parentElement?.parentElement?.parentElement ||
+            field.parentElement?.parentElement;
+          const singleValue = (
+            container?.querySelector("[class*='singleValue'], [class*='single-value']")?.textContent || ""
+          )
             .replace(/\*/g, "")
             .trim();
-          answered = !/select\.\.\./i.test(wrapperText) && wrapperText.length > question.length;
+          const liveValue = (container?.querySelector("[aria-live]")?.textContent || "").replace(/\*/g, "").trim();
+          const hiddenValue = Array.from(container?.querySelectorAll("input[type='hidden']") || [])
+            .map((node) => (node.value || "").trim())
+            .filter(Boolean)
+            .join(" ");
+          const wrapperText = `${control?.textContent || ""} ${singleValue} ${liveValue} ${hiddenValue}`
+            .replace(/\*/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+          answered =
+            Boolean(singleValue || liveValue || hiddenValue) ||
+            (Boolean(wrapperText) && !/^select\.\.\.$/i.test(wrapperText));
         } else {
           answered = Boolean(field.value.trim());
         }
@@ -705,8 +784,13 @@ async function collectUnmatchedGreenhouseQuestions(page) {
       }
     }
 
-    const groups = Array.from(questionsRoot.querySelectorAll("fieldset[id^='question_']"));
+    const groups = Array.from(document.querySelectorAll("fieldset[id^='question_']"));
     for (const group of groups) {
+      const required = (group.textContent || "").includes("*");
+      if (!required) {
+        continue;
+      }
+
       const text = (group.textContent || "").replace(/\*/g, "").trim();
       const question = text.split(/\s{2,}|\n/)[0]?.trim();
       const answered = Boolean(group.querySelector("input:checked"));
@@ -720,6 +804,19 @@ async function collectUnmatchedGreenhouseQuestions(page) {
 }
 
 async function focusSubmitButton(page) {
+  const button = await findSubmitButton(page);
+  if (!button) {
+    return;
+  }
+
+  try {
+    await button.scrollIntoViewIfNeeded();
+  } catch (error) {
+    // Ignore missing buttons.
+  }
+}
+
+async function findSubmitButton(page) {
   const selectors = [
     "button[type='submit']",
     "input[type='submit']",
@@ -730,12 +827,168 @@ async function focusSubmitButton(page) {
     try {
       const button = page.locator(selector).first();
       await button.waitFor({ state: "visible", timeout: 800 });
-      await button.scrollIntoViewIfNeeded();
-      return;
+      return button;
     } catch (error) {
       // Ignore missing buttons.
     }
   }
+
+  return null;
+}
+
+async function submitGreenhouseApplication(page, jobReport, options = {}) {
+  const { canPromptAfterCaptcha = false } = options;
+  const button = await findSubmitButton(page);
+  if (!button) {
+    pushUnique(jobReport.blockingIssues, "submit button not found");
+    return;
+  }
+
+  const firstAttempt = await attemptGreenhouseSubmit(page, button, jobReport);
+  if (firstAttempt === "submitted" || firstAttempt === "validation" || firstAttempt === "unknown") {
+    return;
+  }
+
+  if (firstAttempt === "captcha" && canPromptAfterCaptcha) {
+    console.log(`Solve the CAPTCHA for ${jobReport.title} at ${jobReport.company}, then press Enter here to retry submit.`);
+    await focusSubmitButton(page);
+    await waitForEnter();
+    const retryButton = await findSubmitButton(page);
+    if (!retryButton) {
+      pushUnique(jobReport.blockingIssues, "submit button not found after CAPTCHA");
+      return;
+    }
+    await attemptGreenhouseSubmit(page, retryButton, jobReport);
+  }
+}
+
+async function attemptGreenhouseSubmit(page, button, jobReport) {
+  await button.scrollIntoViewIfNeeded();
+  await button.click();
+
+  try {
+    await Promise.race([
+      page.waitForURL((url) => url.toString() !== jobReport.url, { timeout: 10000 }),
+      page.getByText(/thank you for applying|application submitted|we have received your application/i).first().waitFor({
+        state: "visible",
+        timeout: 10000
+      })
+    ]);
+    jobReport.submitted = true;
+    jobReport.confirmationUrl = page.url();
+    console.log(`Submitted ${jobReport.title} at ${jobReport.company}.`);
+    return "submitted";
+  } catch (error) {
+    const validationErrors = await collectGreenhouseValidationErrors(page);
+    if (validationErrors.length > 0) {
+      for (const validationError of validationErrors) {
+        pushUnique(jobReport.blockingIssues, `submit validation: ${validationError}`);
+      }
+      console.log(`Submit needs review for ${jobReport.title} at ${jobReport.company}.`);
+      return "validation";
+    }
+
+    if (await hasVisibleCaptcha(page)) {
+      pushUnique(jobReport.blockingIssues, "captcha detected");
+      console.log(`Submit is waiting on CAPTCHA for ${jobReport.title} at ${jobReport.company}.`);
+      return "captcha";
+    }
+
+    pushUnique(jobReport.blockingIssues, "submit confirmation was not detected");
+    return "unknown";
+  }
+}
+
+async function collectGreenhouseSubmitBlockers(page, jobReport) {
+  const blockers = [];
+
+  for (const missingField of jobReport.fieldsMissing) {
+    if (!IGNORED_SUBMIT_MISSING.includes(missingField)) {
+      blockers.push(missingField);
+    }
+  }
+
+  for (const question of jobReport.unmatchedQuestions) {
+    blockers.push(`question: ${question}`);
+  }
+
+  return Array.from(new Set(blockers));
+}
+
+async function hasVisibleCaptcha(page) {
+  const selectors = [
+    "iframe[src*='recaptcha']",
+    ".g-recaptcha",
+    "#recaptcha",
+    "[title*='reCAPTCHA']"
+  ];
+
+  for (const selector of selectors) {
+    const matches = page.locator(selector);
+    const count = await matches.count();
+    for (let index = 0; index < count; index += 1) {
+      const match = matches.nth(index);
+      try {
+        if (!(await match.isVisible())) {
+          continue;
+        }
+
+        const box = await match.boundingBox();
+        if (!box || box.width < 40 || box.height < 20) {
+          continue;
+        }
+
+        const isBadge = await match.evaluate((node) => {
+          const text = `${node.getAttribute("class") || ""} ${node.getAttribute("title") || ""} ${node.id || ""}`.toLowerCase();
+          const style = window.getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+          const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+          const fixedBottomCorner =
+            style.position === "fixed" &&
+            rect.right >= viewportWidth - 48 &&
+            rect.bottom >= viewportHeight - 48 &&
+            rect.height <= 120;
+
+          return text.includes("badge") || fixedBottomCorner;
+        }).catch(() => false);
+
+        if (isBadge) {
+          continue;
+        }
+
+        return true;
+      } catch (error) {
+        // Ignore detached or non-visible captcha artifacts.
+      }
+    }
+  }
+
+  return false;
+}
+
+async function collectGreenhouseValidationErrors(page) {
+  const errorTexts = [];
+  const selectors = [
+    "[role='alert']",
+    ".error",
+    ".field-error",
+    ".input-error",
+    ".validation-error"
+  ];
+
+  for (const selector of selectors) {
+    const matches = page.locator(selector);
+    const count = await matches.count();
+    for (let index = 0; index < count; index += 1) {
+      const text = String((await matches.nth(index).textContent()) || "").replace(/\s+/g, " ").trim();
+      if (text) {
+        errorTexts.push(text);
+      }
+    }
+  }
+
+  return Array.from(new Set(errorTexts));
 }
 
 function buildReportPath(kitPath) {
@@ -762,6 +1015,7 @@ function normalizeCandidate(candidate) {
     lastName: cleanValue(candidate.lastName),
     linkedinUrl: cleanValue(candidate.linkedinUrl),
     phone: cleanValue(candidate.phone),
+    phoneCountry: cleanValue(candidate.phoneCountry) || inferPhoneCountry(candidate),
     portfolioUrl: cleanValue(candidate.portfolioUrl),
     resumeFilePath: cleanPath(candidate.resumeFilePath),
     sponsorship: cleanValue(candidate.sponsorship),
@@ -777,16 +1031,70 @@ function cleanPath(value) {
   return cleanValue(value).replace(/^['"]+|['"]+$/g, "");
 }
 
+function reconcileGreenhouseQuestions(unmatchedQuestions = [], fieldsFilled = []) {
+  return unmatchedQuestions.filter((question) => {
+    const matchedField = greenhouseQuestionFieldName(question);
+    return !matchedField || !fieldsFilled.includes(matchedField);
+  });
+}
+
+function greenhouseQuestionFieldName(question) {
+  const normalizedQuestion = cleanValue(question).toLowerCase();
+
+  if (!normalizedQuestion) {
+    return "";
+  }
+
+  if (normalizedQuestion.includes("how did you hear about")) {
+    return "how you heard";
+  }
+
+  if (normalizedQuestion.includes("consulting firm or agency environment")) {
+    return "agency experience";
+  }
+
+  if (normalizedQuestion.includes("how much lead time will you need before you can start")) {
+    return "start availability";
+  }
+
+  if (normalizedQuestion.includes("what are your pronouns")) {
+    return "pronouns";
+  }
+
+  if (normalizedQuestion.includes("upcoming commitments") || normalizedQuestion.includes("work schedule or availability")) {
+    return "upcoming commitments";
+  }
+
+  if (normalizedQuestion.includes("zip code")) {
+    return "zip code";
+  }
+
+  return "";
+}
+
+function mergeAutofillCandidate(sharedCandidate = {}, jobDefaults = {}) {
+  return {
+    ...sharedCandidate,
+    ...jobDefaults,
+    applicationAnswers: {
+      ...(sharedCandidate.applicationAnswers || {}),
+      ...(jobDefaults.applicationAnswers || {})
+    }
+  };
+}
+
 function normalizeApplicationAnswers(answers = {}) {
+  const hearAbout = cleanValue(answers.hearAbout);
+
   return {
     agencyExperience: cleanValue(answers.agencyExperience),
     agencyName: cleanValue(answers.agencyName),
     employmentPreference: cleanValue(answers.employmentPreference),
-    hearAbout: cleanValue(answers.hearAbout),
-    hearAboutDetail: cleanValue(answers.hearAboutDetail),
+    hearAbout,
+    hearAboutDetail: cleanValue(answers.hearAboutDetail) || defaultHearAboutDetail(hearAbout),
     pronouns: cleanValue(answers.pronouns),
     startAvailability: cleanValue(answers.startAvailability),
-    upcomingCommitments: cleanValue(answers.upcomingCommitments),
+    upcomingCommitments: cleanValue(answers.upcomingCommitments) || "N/A",
     usZipCode: cleanValue(answers.usZipCode)
   };
 }
@@ -799,7 +1107,7 @@ function hearAboutOptions(value) {
   }
 
   if (normalized === "linkedin") {
-    return ["LinkedIn"];
+    return ["Job board (Please share which one)", "Job board", "Other"];
   }
 
   if (normalized === "referral") {
@@ -848,6 +1156,14 @@ function yesNoOptions(value) {
   return [];
 }
 
+function defaultHearAboutDetail(value) {
+  if (value === "linkedin") {
+    return "LinkedIn";
+  }
+
+  return "";
+}
+
 function escapeRegex(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -893,6 +1209,44 @@ function pushUnique(list, value) {
   if (!list.includes(value)) {
     list.push(value);
   }
+}
+
+function buildGreenhouseComboboxSearchTerms(value, matchMode = "text") {
+  const trimmedValue = String(value || "").trim();
+  if (!trimmedValue) {
+    return [];
+  }
+
+  if (matchMode !== "location") {
+    return [trimmedValue];
+  }
+
+  const parts = trimmedValue
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const cityOnly = parts[0] || trimmedValue;
+  const withoutStateAbbreviation = trimmedValue.replace(/,\s*[A-Z]{2}\b/g, "").trim();
+
+  return Array.from(new Set([trimmedValue, withoutStateAbbreviation, cityOnly].filter(Boolean)));
+}
+
+function inferPhoneCountry(candidate) {
+  const currentLocation = cleanValue(candidate.currentLocation).toLowerCase();
+  const workAuthorization = cleanValue(candidate.workAuthorization).toLowerCase();
+  const sponsorship = cleanValue(candidate.sponsorship).toLowerCase();
+  const digits = cleanValue(candidate.phone).replace(/\D/g, "");
+
+  const looksUsBased =
+    /\b(us|u\.s\.|united states|charleston|ny|ca|tx|fl|ga|sc|nc)\b/.test(currentLocation) ||
+    /\bus\b|united states|uscitizen|authorized to work in the u\.s\./.test(workAuthorization) ||
+    sponsorship.includes("u.s.");
+
+  if (looksUsBased && digits.length >= 10) {
+    return "United States +1";
+  }
+
+  return "";
 }
 
 function waitForEnter() {

@@ -1,0 +1,55 @@
+{
+  "generatedAt": "2026-03-17T09:29:47.111Z",
+  "ignoredMissing": [
+    "full name: no matching input found"
+  ],
+  "sourceKit": "/Users/zenzai613/Downloads/job-optimizer-application-kit.json",
+  "sourceReportGeneratedAt": "2026-03-17T09:29:47.005Z",
+  "strict": false,
+  "totals": {
+    "jobs": 1,
+    "jobsOk": 0,
+    "jobsWithRemainingIssues": 1
+  },
+  "jobs": [
+    {
+      "blockingIssues": [
+        "question: If we make an offer, how much lead time will you need before you can start?",
+        "captcha detected"
+      ],
+      "company": "Fueled",
+      "fieldsFilled": [
+        "first name",
+        "preferred first name",
+        "last name",
+        "email",
+        "phone country",
+        "phone",
+        "location",
+        "linkedin",
+        "website",
+        "resume upload",
+        "pronouns",
+        "how you heard",
+        "how you heard detail",
+        "employment preference",
+        "agency experience",
+        "agency name",
+        "upcoming commitments"
+      ],
+      "id": "greenhouse-fueledcareers-5134378008",
+      "ignoredMissing": [
+        "full name: no matching input found"
+      ],
+      "mode": "review-only",
+      "remainingMissing": [],
+      "status": "needs-review",
+      "submitted": false,
+      "title": "Senior React Native Engineer",
+      "unmatchedQuestions": [
+        "If we make an offer, how much lead time will you need before you can start?"
+      ],
+      "url": "https://job-boards.greenhouse.io/fueledcareers/jobs/5134378008"
+    }
+  ]
+}

@@ -301,7 +301,7 @@ There is no application backend yet. The only Node-side logic today is:
 - `lib/discovery-preferences.mjs` holds the shared location-mode filtering logic
 - `lib/job-discovery.mjs` holds source detection, ATS fetches, normalization, and relevance filtering
 - ATS pulls now fan out across sources in parallel and use request timeouts
-- `scripts/autofill-greenhouse.mjs` reads an exported application kit, fills common Greenhouse fields, applies saved answers to standard screening questions, uploads a resume when possible, writes a `*-greenhouse-report.json` summary, supports `--job=` or `--all`, and pauses before submit
+- `scripts/autofill-greenhouse.mjs` reads an exported application kit, fills common Greenhouse fields, applies saved answers to standard screening questions, uploads a resume when possible, writes a `*-greenhouse-report.json` summary, supports `--job=` or `--all`, and now has a guarded `--submit` path that only proceeds when blockers are clear
 - `scripts/smoke-greenhouse.mjs` finds the newest application kit, runs a headless Greenhouse autofill pass, normalizes known expected misses, and writes `data/greenhouse-smoke-report.json`
 - `scripts/fetch-jobs.mjs` is the CLI wrapper around that same importer logic
 - `scripts/sync-jobs.mjs` refreshes the full discovery pool into `data/jobs.json` for scheduled automation

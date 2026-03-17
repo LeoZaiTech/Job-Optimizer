@@ -131,6 +131,14 @@ Notes:
 - Some Greenhouse comboboxes, especially location autocomplete fields, may still require manual review if the site does not return a selectable option.
 - You will need `playwright` plus a Chromium browser install for the runner to work locally.
 
+There is now also a guarded submit path:
+
+```bash
+npm run autofill:greenhouse -- /path/to/job-optimizer-application-kit.json --job=<job-id> --submit --headless
+```
+
+It will only attempt submit when required blockers are clear. Otherwise it refuses to submit and records `blockingIssues` in the report.
+
 ## Run a headless Greenhouse smoke test
 
 ```bash
@@ -142,6 +150,7 @@ This command:
 - finds the newest exported `job-optimizer-application-kit*.json` in `data`, `Downloads`, or `/tmp`
 - runs the Greenhouse autofill script in headless review mode
 - writes a summary to `data/greenhouse-smoke-report.json`
+- surfaces submit blockers such as unresolved required questions or CAPTCHA
 
 Useful options:
 
