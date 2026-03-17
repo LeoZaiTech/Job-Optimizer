@@ -1,5 +1,15 @@
+import {
+  applyDiscoveryRemoteMode,
+  filterJobsByExcludedLocations,
+  humanizeRemoteMode,
+  normalizeExcludedLocations,
+  normalizeRemoteMode
+} from "./lib/discovery-preferences.mjs";
+import { CURATED_DISCOVERY_BATCHES, STARTER_SOURCE_URLS } from "./lib/discovery-sources.mjs";
+
 const STORAGE_KEYS = {
   customJobs: "job-optimizer-custom-jobs",
+  discovery: "job-optimizer-discovery-settings",
   importedJobs: "job-optimizer-imported-jobs",
   profile: "job-optimizer-profile",
   statuses: "job-optimizer-statuses"
@@ -66,17 +76,19 @@ const STATUS_LABELS = {
   archived: "Archived"
 };
 
-const STARTER_SOURCE_URLS = [
-  "https://jobs.ashbyhq.com/Nash/dc9645ae-dab2-4ed1-8db4-b06ae790f747",
-  "https://jobs.ashbyhq.com/partiful/0a8ff10d-0adb-4978-830b-f2901321302c",
-  "https://jobs.lever.co/filevine/1935eaab-1536-442f-9b55-0110ce6abe3a",
-  "https://jobs.lever.co/USMobile/5c7bd7b9-477a-4006-b766-486eb81bead2",
-  "https://jobs.lever.co/wahed.com/11dae8eb-7800-42c6-b9b0-a19690a167a1",
-  "https://bitso.com/jobs/6507583003?gh_jid=6507583003"
-];
+const DEFAULT_DISCOVERY_SETTINGS = {
+  autoPullWhenEmpty: false,
+  excludeLocations: "",
+  fallbackBatchIndex: 0,
+  remoteMode: "preferred",
+  sourceUrls: []
+};
 
 const state = {
+  autoPullAttempted: false,
   customJobs: [],
+  discovery: { ...DEFAULT_DISCOVERY_SETTINGS },
+  importInFlight: false,
   importedJobs: [],
   importReport: null,
   jobs: [],
@@ -86,7 +98,8 @@ const state = {
   filters: {
     fit: "all",
     search: "",
-    status: "all"
+    status: "all",
+    view: "active"
   }
 };
 
@@ -101,6 +114,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function initializeApp() {
   state.jobs = await loadSeedJobs();
+  elements.importUrls.value = state.discovery.sourceUrls.join("\n");
   if (!state.selectedJobId && allJobs().length > 0) {
     state.selectedJobId = allJobs()[0].id;
   }
@@ -108,8 +122,10 @@ async function initializeApp() {
 }
 
 function cacheElements() {
+  elements.autoPullToggle = document.querySelector("#autoPullToggle");
   elements.clearImportedJobs = document.querySelector("#clearImportedJobs");
   elements.exportQueue = document.querySelector("#exportQueue");
+  elements.excludeLocationsInput = document.querySelector("#excludeLocationsInput");
   elements.filtersForm = document.querySelector("#filtersForm");
   elements.flash = document.querySelector("#flash");
   elements.heroSpotlight = document.querySelector("#heroSpotlight");
@@ -123,14 +139,25 @@ function cacheElements() {
   elements.jobList = document.querySelector("#jobList");
   elements.loadStarterJobs = document.querySelector("#loadStarterJobs");
   elements.metrics = document.querySelector("#metrics");
+  elements.pullMoreJobs = document.querySelector("#pullMoreJobs");
   elements.profileForm = document.querySelector("#profileForm");
   elements.profileSignals = document.querySelector("#profileSignals");
   elements.queueList = document.querySelector("#queueList");
+  elements.remoteModeSelect = document.querySelector("#remoteModeSelect");
   elements.resumeFile = document.querySelector("#resumeFile");
   elements.searchRecipes = document.querySelector("#searchRecipes");
+  elements.submitImportJobs = elements.importForm.querySelector('button[type="submit"]');
 }
 
 function restoreState() {
+  state.discovery = {
+    ...DEFAULT_DISCOVERY_SETTINGS,
+    ...readJson(STORAGE_KEYS.discovery, {})
+  };
+  state.discovery.fallbackBatchIndex = Number(state.discovery.fallbackBatchIndex || 0) || 0;
+  state.discovery.excludeLocations = normalizeExcludedLocationsText(state.discovery.excludeLocations);
+  state.discovery.remoteMode = normalizeRemoteMode(state.discovery.remoteMode);
+  state.discovery.sourceUrls = normalizeSourceUrls(state.discovery.sourceUrls);
   state.profile = {
     ...DEFAULT_PROFILE,
     ...readJson(STORAGE_KEYS.profile, {})
@@ -156,15 +183,19 @@ async function loadSeedJobs() {
 }
 
 function bindEvents() {
+  elements.autoPullToggle.addEventListener("change", handleAutoPullToggle);
   elements.clearImportedJobs.addEventListener("click", handleClearImportedJobs);
   elements.importForm.addEventListener("submit", handleImportSubmit);
   elements.loadStarterJobs.addEventListener("click", handleLoadStarterJobs);
+  elements.excludeLocationsInput.addEventListener("input", handleExcludeLocationsChange);
+  elements.remoteModeSelect.addEventListener("change", handleRemoteModeChange);
   elements.profileForm.addEventListener("input", handleProfileChange);
   elements.filtersForm.addEventListener("input", handleFilterChange);
   elements.historyList.addEventListener("click", handleJobSelection);
   elements.jobForm.addEventListener("submit", handleJobSubmit);
   elements.jobList.addEventListener("click", handleJobSelection);
   elements.queueList.addEventListener("click", handleJobSelection);
+  elements.pullMoreJobs.addEventListener("click", handlePullMoreJobs);
   elements.jobDetail.addEventListener("click", handleDetailClick);
   elements.jobDetail.addEventListener("change", handleDetailChange);
   elements.searchRecipes.addEventListener("click", handleRecipeClick);
@@ -187,6 +218,27 @@ function handleProfileChange() {
     resumeText: String(formData.get("resumeText") || "").trim()
   };
   writeJson(STORAGE_KEYS.profile, state.profile);
+  render();
+}
+
+function handleAutoPullToggle(event) {
+  state.discovery.autoPullWhenEmpty = event.target.checked;
+  persistDiscoverySettings();
+  state.autoPullAttempted = false;
+  render();
+}
+
+function handleRemoteModeChange(event) {
+  state.discovery.remoteMode = normalizeRemoteMode(event.target.value);
+  persistDiscoverySettings();
+  state.autoPullAttempted = false;
+  render();
+}
+
+function handleExcludeLocationsChange(event) {
+  state.discovery.excludeLocations = normalizeExcludedLocationsText(event.target.value);
+  persistDiscoverySettings();
+  state.autoPullAttempted = false;
   render();
 }
 
@@ -221,12 +273,7 @@ async function handleResumeUpload(event) {
 async function handleImportSubmit(event) {
   event.preventDefault();
 
-  const formData = new FormData(elements.importForm);
-  const rawValue = String(formData.get("sourceUrls") || "").trim();
-  const urls = rawValue
-    .split("\n")
-    .map((value) => value.trim())
-    .filter(Boolean);
+  const urls = normalizeSourceUrls(elements.importUrls.value);
 
   if (urls.length === 0) {
     showFlash("Paste at least one Greenhouse, Lever, Ashby, or direct job URL.");
@@ -237,18 +284,33 @@ async function handleImportSubmit(event) {
 }
 
 async function handleLoadStarterJobs() {
-  elements.importUrls.value = STARTER_SOURCE_URLS.join("\n");
+  state.discovery.fallbackBatchIndex = 0;
+  persistDiscoverySettings();
   await importLiveJobs(STARTER_SOURCE_URLS, {
     loadingMessage: "Loading starter live jobs..."
   });
 }
 
+async function handlePullMoreJobs() {
+  await importNextDiscoveryBatch({
+    loadingMessage: "Pulling more jobs from the next discovery batch..."
+  });
+}
+
 function handleClearImportedJobs() {
+  const customJobIds = new Set(state.customJobs.map((job) => normalizeJob(job).id));
   state.importedJobs = [];
   state.importReport = null;
+  state.discovery.fallbackBatchIndex = 0;
+  state.statuses = Object.fromEntries(
+    Object.entries(state.statuses).filter(([jobId]) => customJobIds.has(jobId))
+  );
   writeJson(STORAGE_KEYS.importedJobs, state.importedJobs);
+  writeJson(STORAGE_KEYS.statuses, state.statuses);
+  persistDiscoverySettings();
+  state.autoPullAttempted = false;
   render();
-  showFlash("Imported jobs cleared.");
+  showFlash("Imported jobs cleared and discovery lead statuses reset.");
 }
 
 function handleFilterChange() {
@@ -256,7 +318,8 @@ function handleFilterChange() {
   state.filters = {
     fit: String(formData.get("fit") || "all"),
     search: String(formData.get("search") || "").trim().toLowerCase(),
-    status: String(formData.get("status") || "all")
+    status: String(formData.get("status") || "all"),
+    view: normalizeBoardView(formData.get("view"))
   };
   render();
 }
@@ -360,6 +423,7 @@ function handleRecipeClick(event) {
 
 function render() {
   hydrateForms();
+  syncImportControls();
   renderProfileSignals();
   renderImportResults();
   renderSearchRecipes();
@@ -367,9 +431,14 @@ function render() {
   renderHistoryList();
   renderJobList();
   renderJobDetail();
+  scheduleAutoPullCheck();
 }
 
 function hydrateForms() {
+  elements.autoPullToggle.checked = state.discovery.autoPullWhenEmpty;
+  elements.excludeLocationsInput.value = state.discovery.excludeLocations;
+  elements.remoteModeSelect.value = state.discovery.remoteMode;
+  elements.filtersForm.view.value = normalizeBoardView(state.filters.view);
   elements.profileForm.summary.value = state.profile.summary;
   elements.profileForm.linkedinUrl.value = state.profile.linkedinUrl;
   elements.profileForm.githubUrl.value = state.profile.githubUrl;
@@ -516,6 +585,9 @@ function renderImportResults() {
   const importedCount = state.importedJobs.length;
   const report = state.importReport;
   const sampleCount = state.jobs.filter((job) => isSampleJob(job)).length;
+  const savedSourceCount = state.discovery.sourceUrls.length;
+  const nextBatchNumber = normalizeBatchIndex(state.discovery.fallbackBatchIndex) + 1;
+  const excludedLocations = normalizeExcludedLocations(state.discovery.excludeLocations);
 
   elements.importResults.innerHTML = `
     <div class="profile-signal-grid">
@@ -537,6 +609,17 @@ function renderImportResults() {
                   : "Import a Greenhouse, Lever, or Ashby board to bring live roles into the board."
               }</p>`
         }
+        <p class="mini-note">${
+          savedSourceCount > 0
+            ? `${savedSourceCount} saved source${savedSourceCount === 1 ? "" : "s"} are ready for exact imports from the textarea. Pull more jobs will rotate to curated discovery batch ${nextBatchNumber}.`
+            : `Pull more jobs will rotate to curated discovery batch ${nextBatchNumber}.`
+        }</p>
+        <p class="mini-note">Discovery mode: ${escapeHtml(humanizeRemoteMode(state.discovery.remoteMode))}. Each pull fans out across a broader ATS source pool and skips to the next batch when a batch adds nothing new.</p>
+        <p class="mini-note">${
+          excludedLocations.length > 0
+            ? `Excluded locations: ${escapeHtml(excludedLocations.join(", "))}.`
+            : "No location exclusions are active."
+        }</p>
       </article>
 
       <article class="detail-card">
@@ -545,9 +628,20 @@ function renderImportResults() {
           report
             ? `
                 <p class="mini-note">
-                  Found ${report.totalFound} matching role${report.totalFound === 1 ? "" : "s"} and added ${report.importedCount} new one${
+                  Found ${report.totalFound} matching role${report.totalFound === 1 ? "" : "s"}, kept ${report.keptCount} after ${escapeHtml(
+                    humanizeRemoteMode(report.remoteMode)
+                  ).toLowerCase()}, and added ${report.importedCount} new one${
                     report.importedCount === 1 ? "" : "s"
                   } after dedupe.
+                </p>
+                <p class="mini-note">
+                  ${report.activeCount} landed in Ranked Leads, ${report.queuedCount} moved into Apply next, and ${report.referenceCount} landed in the Reference Shelf.
+                </p>
+                <p class="mini-note">
+                  ${report.remoteCount} of the kept role${report.remoteCount === 1 ? "" : "s"} were marked remote-friendly.
+                </p>
+                <p class="mini-note">
+                  ${report.excludedLocationCount} role${report.excludedLocationCount === 1 ? "" : "s"} were filtered out by your excluded locations.
                 </p>
                 ${
                   report.sources.length > 0
@@ -570,13 +664,18 @@ function renderImportResults() {
                             (error) =>
                               `<li>${escapeHtml(error.input)}: ${escapeHtml(error.error)}</li>`
                           )
-                          .join("")}
+                        .join("")}
                       </ul>`
                     : `<p class="muted">No source errors on the last import.</p>`
                 }
               `
             : `<p class="muted">No live import has run yet in this session.</p>`
         }
+        <p class="mini-note">${
+          state.discovery.autoPullWhenEmpty
+            ? "Auto-pull is on. If your active leads hit zero, the app will fetch another batch once."
+            : "Auto-pull is off. Turn it on if you want the app to fetch another batch when active leads run out."
+        }</p>
       </article>
     </div>
   `;
@@ -602,10 +701,11 @@ async function extractResumeTextFromPdf(file) {
 }
 
 function renderSnapshot() {
-  const jobs = analyzedJobs().filter((job) => !isReferenceStatus(currentStatus(job.id)));
+  const jobs = activeLeadJobs();
+  const applyQueue = buildApplyQueue(analyzedJobs());
   const strongFits = jobs.filter((job) => job.fitBucket === "strong").length;
   const remoteFits = jobs.filter((job) => job.remote).length;
-  const applyNext = jobs.filter((job) => currentStatus(job.id) === "apply-next").length;
+  const applyNext = applyQueue.length;
   const sampleOnlyMode = jobs.length > 0 && jobs.every((job) => isSampleJob(job));
   const averageScore =
     jobs.length > 0
@@ -619,7 +719,6 @@ function renderSnapshot() {
     createMetricCard("Average score", averageScore)
   ].join("");
 
-  const applyQueue = buildApplyQueue(jobs);
   elements.queueList.innerHTML =
     applyQueue.length > 0
       ? applyQueue
@@ -637,7 +736,7 @@ function renderSnapshot() {
             `
           )
           .join("")
-      : `<div class="detail-card"><p class="muted">Mark interesting roles as "Apply next" to build a tighter queue.</p></div>`;
+      : `<div class="detail-card"><p class="muted">Mark interesting roles as "Apply next" to move them out of Ranked Leads and into this queue.</p></div>`;
 
   const spotlightJob = applyQueue[0] || jobs[0];
   elements.heroSpotlight.innerHTML = spotlightJob
@@ -669,34 +768,62 @@ function renderSnapshot() {
 }
 
 function renderHistoryList() {
-  const jobs = historyJobs();
+  const appliedJobs = historyJobs("applied");
+  const archivedJobs = historyJobs("archived");
+  const totalCount = appliedJobs.length + archivedJobs.length;
 
   elements.historyList.innerHTML =
-    jobs.length > 0
-      ? jobs
-          .map(
-            (job) => `
-              <button class="queue-item history-item" type="button" data-job-id="${escapeHtml(job.id)}">
-                <div>
-                  <strong>${escapeHtml(job.title)}</strong>
-                  <p>${escapeHtml(job.company)} · ${escapeHtml(job.location)}</p>
-                </div>
-                <div class="history-meta">
-                  <span class="chip">${escapeHtml(currentStatusLabel(job.id))}</span>
-                  <span class="pill ${fitClass(job.fitBucket)}">${escapeHtml(
-                    fitLabel(job.fitBucket)
-                  )} · ${job.score}</span>
-                </div>
-              </button>
-            `
-          )
-          .join("")
+    totalCount > 0
+      ? `
+          <div class="history-groups">
+            ${renderHistoryGroup("Applied", appliedJobs, "Applied jobs will collect here for quick follow-up reference.")}
+            ${renderHistoryGroup("Archived", archivedJobs, "Archived jobs will collect here when you want to keep them out of the active board.")}
+          </div>
+        `
       : `<div class="detail-card"><p class="muted">Jobs marked as Applied or Archived will collect here so you can reference them without crowding the active board.</p></div>`;
+}
+
+function renderHistoryGroup(title, jobs, emptyMessage) {
+  return `
+    <article class="detail-card history-group">
+      <div class="history-group-head">
+        <div>
+          <h4>${escapeHtml(title)}</h4>
+          <p class="muted">${jobs.length} role${jobs.length === 1 ? "" : "s"}</p>
+        </div>
+      </div>
+      <div class="history-scroller">
+        ${
+          jobs.length > 0
+            ? jobs
+                .map(
+                  (job) => `
+                    <button class="queue-item history-item" type="button" data-job-id="${escapeHtml(job.id)}">
+                      <div>
+                        <strong>${escapeHtml(job.title)}</strong>
+                        <p>${escapeHtml(job.company)} · ${escapeHtml(job.location)}</p>
+                      </div>
+                      <div class="history-meta">
+                        <span class="chip">${escapeHtml(currentStatusLabel(job.id))}</span>
+                        <span class="pill ${fitClass(job.fitBucket)}">${escapeHtml(
+                          fitLabel(job.fitBucket)
+                        )} · ${job.score}</span>
+                      </div>
+                    </button>
+                  `
+                )
+                .join("")
+            : `<div class="history-empty"><p class="muted">${escapeHtml(emptyMessage)}</p></div>`
+        }
+      </div>
+    </article>
+  `;
 }
 
 function renderJobList() {
   const jobs = filteredJobs();
   const referenceCount = historyJobs().length;
+  const stats = boardStats();
   const preserveSelection = analyzedJobs().some(
     (job) => job.id === state.selectedJobId && isReferenceStatus(currentStatus(job.id))
   );
@@ -705,7 +832,7 @@ function renderJobList() {
     state.selectedJobId = jobs[0].id;
   }
 
-  elements.jobCount.textContent = `${jobs.length} role${jobs.length === 1 ? "" : "s"}`;
+  elements.jobCount.textContent = `${jobs.length} shown · ${stats.activeCount} active · ${stats.queueCount} in Apply next · ${stats.referenceCount} reference · ${stats.totalCount} total`;
   elements.jobList.innerHTML =
     jobs.length > 0
       ? jobs
@@ -739,11 +866,7 @@ function renderJobList() {
             `
           )
           .join("")
-      : `<div class="empty-state">${
-          referenceCount > 0
-            ? "No active leads match these filters right now. Check the Reference Shelf for applied and archived jobs."
-            : "Nothing matches these filters yet. Loosen the fit filter or add a new lead."
-        }</div>`;
+      : `<div class="empty-state">${emptyBoardMessage(referenceCount)}</div>`;
 }
 
 function renderJobDetail() {
@@ -875,39 +998,81 @@ function analyzedJobs() {
 }
 
 function filteredJobs() {
-  return analyzedJobs().filter((job) => {
+  const normalizedView = normalizeBoardView(state.filters.view);
+  const baseJobs =
+    state.filters.status === "apply-next"
+      ? buildApplyQueue(analyzedJobs())
+      : normalizedView === "all"
+        ? analyzedJobs()
+        : normalizedView === "reference" || state.filters.status === "applied" || state.filters.status === "archived"
+          ? historyJobs()
+          : activeLeadJobs();
+
+  return baseJobs.filter((job) => {
     const status = currentStatus(job.id);
     const haystack = `${job.title} ${job.company} ${job.description} ${job.skills.join(" ")}`.toLowerCase();
     const matchesFit = state.filters.fit === "all" || job.fitBucket === state.filters.fit;
-    const matchesStatus =
-      state.filters.status === "all" ? !isReferenceStatus(status) : status === state.filters.status;
+    const matchesStatus = state.filters.status === "all" || status === state.filters.status;
     const matchesSearch = !state.filters.search || haystack.includes(state.filters.search);
     return matchesFit && matchesStatus && matchesSearch;
   });
 }
 
 function buildApplyQueue(jobs) {
-  const marked = jobs.filter((job) => currentStatus(job.id) === "apply-next");
-  const suggested = jobs.filter(
-    (job) => currentStatus(job.id) === "saved" && (job.fitBucket === "strong" || job.fitBucket === "worth")
-  );
-  return [...marked, ...suggested].slice(0, 5);
+  return jobs.filter((job) => currentStatus(job.id) === "apply-next");
 }
 
-function historyJobs() {
-  const statusOrder = {
-    applied: 0,
-    archived: 1
-  };
+function normalizeBoardView(value) {
+  return ["active", "all", "reference"].includes(String(value || "").trim())
+    ? String(value).trim()
+    : "active";
+}
 
+function boardStats() {
+  return {
+    activeCount: activeLeadJobs().length,
+    queueCount: buildApplyQueue(analyzedJobs()).length,
+    referenceCount: historyJobs().length,
+    totalCount: analyzedJobs().length
+  };
+}
+
+function emptyBoardMessage(referenceCount) {
+  const normalizedView = normalizeBoardView(state.filters.view);
+
+  if (state.filters.status === "apply-next") {
+    return "No Apply next roles match these filters right now.";
+  }
+
+  if (normalizedView === "all") {
+    return "No synced roles match these filters right now. Loosen the filters or refresh the discovery pool.";
+  }
+
+  if (normalizedView === "reference") {
+    return "No reference roles match these filters right now.";
+  }
+
+  return referenceCount > 0
+    ? "No active leads match these filters right now. Check All synced roles or the Reference Shelf."
+    : "Nothing matches these filters yet. Loosen the fit filter or add a new lead.";
+}
+
+function activeLeadJobs() {
+  const jobs = analyzedJobs().filter(
+    (job) => !isReferenceStatus(currentStatus(job.id)) && currentStatus(job.id) !== "apply-next"
+  );
+
+  if (jobs.length > 0) {
+    state.autoPullAttempted = false;
+  }
+
+  return jobs;
+}
+
+function historyJobs(status = "") {
   return analyzedJobs()
-    .filter((job) => isReferenceStatus(currentStatus(job.id)))
-    .sort(
-      (left, right) =>
-        (statusOrder[currentStatus(left.id)] || 99) - (statusOrder[currentStatus(right.id)] || 99) ||
-        right.postedAt.localeCompare(left.postedAt) ||
-        right.score - left.score
-    );
+    .filter((job) => status ? currentStatus(job.id) === status : isReferenceStatus(currentStatus(job.id)))
+    .sort((left, right) => right.postedAt.localeCompare(left.postedAt) || right.score - left.score);
 }
 
 function analyzeJob(job, profile) {
@@ -1137,7 +1302,18 @@ function allJobs() {
     ...state.importedJobs.map(normalizeJob),
     ...state.jobs
   ];
-  return jobs.some((job) => !isSampleJob(job)) ? jobs.filter((job) => !isSampleJob(job)) : jobs;
+  const visibleJobs = jobs.some((job) => !isSampleJob(job)) ? jobs.filter((job) => !isSampleJob(job)) : jobs;
+  const locationFilteredJobs = filterJobsByExcludedLocations(visibleJobs, state.discovery.excludeLocations).jobs;
+  const dedupedJobs = new Map();
+
+  locationFilteredJobs.forEach((job) => {
+    const key = crossSourceIdentity(job);
+    if (!dedupedJobs.has(key)) {
+      dedupedJobs.set(key, job);
+    }
+  });
+
+  return [...dedupedJobs.values()];
 }
 
 function normalizeJob(job) {
@@ -1242,6 +1418,10 @@ function importIdentity(job) {
   return [job.url || "", job.externalId || "", `${job.company}::${job.title}`.toLowerCase()].join("::");
 }
 
+function crossSourceIdentity(job) {
+  return job.url || job.externalId ? importIdentity(job) : String(job.id || importIdentity(job));
+}
+
 function summarizeImportedSources(jobs) {
   const counts = new Map();
 
@@ -1325,14 +1505,34 @@ function exportProfileSnapshot(profile) {
 }
 
 async function importLiveJobs(urls, options = {}) {
+  const normalizedUrls = normalizeSourceUrls(urls);
+
+  if (normalizedUrls.length === 0) {
+    showFlash("Add at least one discovery source before pulling more jobs.");
+    return;
+  }
+
+  if (state.importInFlight) {
+    showFlash("A live import is already running.");
+    return null;
+  }
+
+  if (options.rememberSources !== false) {
+    rememberDiscoverySources(normalizedUrls);
+  }
+  state.importInFlight = true;
+  syncImportControls();
+
   try {
+    const previousBoardKeys = new Set(allJobs().map((job) => crossSourceIdentity(job)));
+
     showFlash(
       options.loadingMessage ||
-        `Importing jobs from ${urls.length} source${urls.length === 1 ? "" : "s"}...`
+        `Importing jobs from ${normalizedUrls.length} source${normalizedUrls.length === 1 ? "" : "s"}...`
     );
 
     const response = await fetch("/api/import-jobs", {
-      body: JSON.stringify({ urls }),
+      body: JSON.stringify({ urls: normalizedUrls }),
       headers: {
         "Content-Type": "application/json"
       },
@@ -1344,14 +1544,28 @@ async function importLiveJobs(urls, options = {}) {
       throw new Error(payload.error || "Could not import jobs from those sources.");
     }
 
-    const incomingJobs = Array.isArray(payload.jobs) ? payload.jobs.map(normalizeJob) : [];
-    const previousCount = state.importedJobs.length;
+    const discoveredJobs = Array.isArray(payload.jobs) ? payload.jobs.map(normalizeJob) : [];
+    const remoteModeJobs = applyDiscoveryRemoteMode(discoveredJobs, state.discovery.remoteMode);
+    const locationFilterResult = filterJobsByExcludedLocations(remoteModeJobs, state.discovery.excludeLocations);
+    const incomingJobs = locationFilterResult.jobs;
     state.importedJobs = mergeImportedJobs(state.importedJobs, incomingJobs);
+    const mergedBoardJobs = allJobs();
+    const netNewJobs = mergedBoardJobs.filter((job) => !previousBoardKeys.has(crossSourceIdentity(job)));
+    const newActiveJobs = netNewJobs.filter((job) => !isReferenceStatus(currentStatus(job.id)) && currentStatus(job.id) !== "apply-next");
+    const newQueuedJobs = netNewJobs.filter((job) => currentStatus(job.id) === "apply-next");
+    const newReferenceJobs = netNewJobs.filter((job) => isReferenceStatus(currentStatus(job.id)));
     state.importReport = {
       errors: Array.isArray(payload.errors) ? payload.errors : [],
-      importedCount: state.importedJobs.length - previousCount,
+      activeCount: newActiveJobs.length,
+      excludedLocationCount: locationFilterResult.excludedCount,
+      importedCount: netNewJobs.length,
+      keptCount: incomingJobs.length,
+      queuedCount: newQueuedJobs.length,
+      referenceCount: newReferenceJobs.length,
+      remoteCount: incomingJobs.filter((job) => job.remote).length,
+      remoteMode: state.discovery.remoteMode,
       sources: Array.isArray(payload.sources) ? payload.sources : [],
-      totalFound: incomingJobs.length
+      totalFound: discoveredJobs.length
     };
 
     writeJson(STORAGE_KEYS.importedJobs, state.importedJobs);
@@ -1359,16 +1573,176 @@ async function importLiveJobs(urls, options = {}) {
       state.selectedJobId = incomingJobs[0].id;
     }
 
+    if (state.importedJobs.length > 0) {
+      state.autoPullAttempted = false;
+    }
+
+    const result = {
+      activeCount: state.importReport.activeCount,
+      importedCount: state.importReport.importedCount,
+      totalFound: incomingJobs.length,
+      urls: normalizedUrls
+    };
+
     render();
-    showFlash(
-      state.importReport.importedCount > 0
-        ? `Imported ${state.importReport.importedCount} new job${state.importReport.importedCount === 1 ? "" : "s"}.`
-        : "Import finished. No new jobs were added after dedupe."
-    );
+    if (!options.suppressResultFlash) {
+      showFlash(
+        state.importReport.importedCount > 0
+          ? state.importReport.activeCount > 0
+            ? `Imported ${state.importReport.importedCount} new board role${
+                state.importReport.importedCount === 1 ? "" : "s"
+              }. ${state.importReport.activeCount} landed in Ranked Leads.`
+            : `Imported ${state.importReport.importedCount} new board role${
+                state.importReport.importedCount === 1 ? "" : "s"
+              }, but none landed in Ranked Leads. Check Apply next or the Reference Shelf.`
+          : "Import finished. No new board roles were added after dedupe."
+      );
+    }
+
+    return result;
   } catch (error) {
     console.error(error);
-    showFlash(error instanceof Error ? error.message : "Could not import jobs right now.");
+    if (!options.suppressErrorFlash) {
+      showFlash(error instanceof Error ? error.message : "Could not import jobs right now.");
+    }
+    return null;
+  } finally {
+    state.importInFlight = false;
+    syncImportControls();
   }
+}
+
+function normalizeSourceUrls(value) {
+  return Array.from(
+    new Set(
+      (Array.isArray(value) ? value : String(value || "").split("\n"))
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function normalizeExcludedLocationsText(value) {
+  return normalizeExcludedLocations(value).join(", ");
+}
+
+async function importNextDiscoveryBatch(options = {}) {
+  const batchCount = CURATED_DISCOVERY_BATCHES.length;
+  if (batchCount === 0) {
+    showFlash("No discovery batches are configured yet.");
+    return null;
+  }
+
+  const startIndex = normalizeBatchIndex(state.discovery.fallbackBatchIndex);
+
+  for (let offset = 0; offset < batchCount; offset += 1) {
+    const batchIndex = normalizeBatchIndex(startIndex + offset);
+    const urls = CURATED_DISCOVERY_BATCHES[batchIndex];
+    const result = await importLiveJobs(urls, {
+      loadingMessage:
+        offset === 0
+          ? options.loadingMessage
+          : "That batch had no new jobs. Trying another discovery batch...",
+      rememberSources: false,
+      suppressErrorFlash: offset < batchCount - 1,
+      suppressResultFlash: true
+    });
+
+    state.discovery.fallbackBatchIndex = normalizeBatchIndex(batchIndex + 1);
+    persistDiscoverySettings();
+
+    if (!result) {
+      if (offset === batchCount - 1) {
+        showFlash("Could not pull more jobs right now.");
+      }
+      continue;
+    }
+
+    if (result.importedCount > 0) {
+      showFlash(
+        `Imported ${result.importedCount} new job${result.importedCount === 1 ? "" : "s"} from discovery batch ${
+          batchIndex + 1
+        }.`
+      );
+      return result;
+    }
+  }
+
+  showFlash(exhaustedDiscoveryMessage());
+  return {
+    importedCount: 0,
+    totalFound: 0,
+    urls: []
+  };
+}
+
+function normalizeBatchIndex(value) {
+  const batchCount = CURATED_DISCOVERY_BATCHES.length || 1;
+  const numericValue = Number(value || 0) || 0;
+  return ((numericValue % batchCount) + batchCount) % batchCount;
+}
+
+function exhaustedDiscoveryMessage() {
+  const hasLiveBoardSnapshot = state.jobs.some((job) => !isSampleJob(job));
+
+  if (hasLiveBoardSnapshot) {
+    return "No new jobs were found across the available discovery batches. Your current board likely already contains the built-in discovery pool. Run sync:jobs again later or add more source URLs.";
+  }
+
+  return "No new jobs were found across the available discovery batches.";
+}
+
+function rememberDiscoverySources(urls) {
+  const normalizedUrls = normalizeSourceUrls(urls);
+  if (normalizedUrls.length === 0) {
+    return;
+  }
+
+  state.discovery.sourceUrls = normalizedUrls;
+  elements.importUrls.value = normalizedUrls.join("\n");
+  persistDiscoverySettings();
+}
+
+function persistDiscoverySettings() {
+  writeJson(STORAGE_KEYS.discovery, state.discovery);
+}
+
+function syncImportControls() {
+  const disabled = state.importInFlight;
+  elements.autoPullToggle.disabled = disabled;
+  elements.clearImportedJobs.disabled = disabled;
+  elements.excludeLocationsInput.disabled = disabled;
+  elements.importUrls.disabled = disabled;
+  elements.loadStarterJobs.disabled = disabled;
+  elements.pullMoreJobs.disabled = disabled;
+  elements.remoteModeSelect.disabled = disabled;
+  elements.submitImportJobs.disabled = disabled;
+}
+
+function scheduleAutoPullCheck() {
+  window.clearTimeout(scheduleAutoPullCheck.timeout);
+  scheduleAutoPullCheck.timeout = window.setTimeout(() => {
+    maybeAutoPullWhenEmpty();
+  }, 0);
+}
+
+async function maybeAutoPullWhenEmpty() {
+  if (state.importInFlight || !state.discovery.autoPullWhenEmpty) {
+    return;
+  }
+
+  if (activeLeadJobs().length > 0) {
+    return;
+  }
+
+  if (state.autoPullAttempted) {
+    return;
+  }
+
+  state.autoPullAttempted = true;
+  await importNextDiscoveryBatch({
+    loadingMessage: "No active leads left. Pulling another batch of jobs..."
+  });
 }
 
 function defaultSourceLabel(job) {

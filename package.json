@@ -5,6 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "sync:jobs": "node scripts/sync-jobs.mjs",
     "start": "node server.mjs",
     "fetch:jobs": "node scripts/fetch-jobs.mjs"
   }

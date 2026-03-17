@@ -35,9 +35,9 @@ Main interface areas:
 - Search Recipes section that generates live search links from the profile
 - Import Jobs section for pulling roles from ATS and direct job URLs
 - Add Job form for manually pasting new roles into the board
-- Snapshot section showing metrics and an `Apply next` queue
+- Snapshot section showing metrics and an `Apply next` queue for leads you explicitly move out of the ranked board
 - Reference Shelf for jobs moved to `Applied` or `Archived`
-- Filters for fit, status, and text search
+- Filters for board view, fit, status, and text search
 - Ranked job list
 - Detail panel with fit breakdown, risks, pitch bullets, resume focus, and status updates
 
@@ -67,7 +67,7 @@ The output of scoring powers:
 
 - the spotlight card
 - top-level metrics
-- the `Apply next` queue
+- the `Apply next` queue for manually queued roles
 - the ranked list order
 - the detail panel guidance
 
@@ -77,6 +77,7 @@ The app persists browser-side state using `localStorage`.
 
 Stored keys:
 
+- `job-optimizer-discovery-settings`
 - `job-optimizer-profile`
 - `job-optimizer-custom-jobs`
 - `job-optimizer-imported-jobs`
@@ -85,6 +86,8 @@ Stored keys:
 This means:
 
 - profile edits survive refreshes
+- saved exact-import source URLs survive refreshes
+- the auto-pull preference and curated discovery position survive refreshes
 - resume text survives refreshes in the same browser
 - LinkedIn, GitHub, and portfolio links survive refreshes in the same browser
 - pasted jobs survive refreshes in the same browser
@@ -107,9 +110,22 @@ The app now also supports live job importing from pasted URLs. The current impor
 
 The UI also includes a `Load starter jobs` action that imports a curated starter set of current live postings without requiring you to hunt down URLs first.
 
+There is also a `Pull more jobs` action that rotates through broader curated discovery batches across a 40+ source ATS pool, plus an optional auto-pull setting that fetches the next batch once when active leads reach zero.
+
+Discovery can now be tuned with a location mode:
+
+- `Remote preferred`
+- `Remote only`
+- `Any location`
+
+`Remote preferred` is intentionally strict: it keeps remote-friendly roles first and only falls back to a very small number of ambiguous listings when a batch is light on clearly remote matches.
+
+Discovery also supports excluded location phrases, so you can filter out places you do not want to target, such as `India`, `Hyderabad`, or `Bengaluru`.
+
 Imported jobs are:
 
 - normalized into the app job shape
+- filtered through the active location mode during discovery
 - filtered for React Native and mobile relevance
 - deduped against each other and existing imported items
 - persisted locally in the browser
@@ -119,6 +135,14 @@ There is also an optional CLI script in `scripts/fetch-jobs.mjs` that uses the s
 - accepts one or more board or job URLs
 - keeps seeded jobs in place so the app stays usable offline
 - writes the merged result back into `data/jobs.json`
+
+There is now also a scheduled-friendly sync script in `scripts/sync-jobs.mjs` that:
+
+- refreshes `data/jobs.json` from the shared starter and curated discovery source pool
+- applies the same remote mode logic used by the UI
+- supports `--exclude-locations=` for recurring region filters
+- writes a `data/job-sync-report.json` summary
+- refuses to overwrite `data/jobs.json` with an empty sync result
 
 ### Export
 
@@ -134,6 +158,7 @@ The Snapshot panel includes an export action that downloads the current apply qu
 - Resume text is parsed locally with a lightweight keyword matcher
 - PDF import uses local macOS PDFKit extraction through the app server
 - Live job import uses ATS JSON APIs when available and falls back to structured job-page parsing
+- Multi-source imports now fan out in parallel with request timeouts so one slow board does not stall the full pull
 
 These choices were made to keep the first version easy to run, easy to inspect, and quick to evolve.
 
@@ -145,7 +170,7 @@ These choices were made to keep the first version easy to run, easy to inspect, 
 - PDF import currently relies on local macOS support
 - No cover letter generation beyond short pitch bullets
 - No backend, sync, or cross-device persistence
-- Live discovery is still user-initiated by pasted URLs rather than automatic crawling or saved-search sync
+- Live discovery in the browser is still user-initiated, even though the CLI sync can now refresh the broader built-in source pool on a schedule
 - The starter job snapshot will go stale unless refreshed
 - Normalization is good for common ATS fields but not yet exhaustive for every board variant
 

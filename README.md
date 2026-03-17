@@ -42,6 +42,12 @@ From the app UI, use the `Import Jobs` panel and paste one or more URLs:
 
 Imported jobs are normalized, deduped, scored, and stored locally in the browser alongside your custom jobs. The UI also includes a `Load starter jobs` action that pulls in a vetted starter set of current live mobile roles.
 
+You can also use `Pull more jobs` to rotate through broader curated discovery batches, while the textarea keeps your exact import sources handy. `Auto-pull when active leads hit zero` uses that same rotating discovery flow. The built-in discovery pool now spans 40+ ATS sources instead of a tiny starter loop.
+
+The import panel now includes a location mode, with `Remote preferred` as the default discovery setting. In that mode, discovery keeps remote roles first and only allows a very small fallback of ambiguous location listings.
+
+You can also add `Exclude locations` in the import panel to drop roles from places you do not want in the board, such as `India, Hyderabad, Bengaluru`.
+
 ## Refresh `data/jobs.json` from live sources
 
 ```bash
@@ -57,13 +63,36 @@ Notes:
 - Live ATS validation has been checked against Greenhouse, Lever, and Ashby endpoints.
 - This is still a user-guided import flow, not a background crawler or authenticated board integration.
 
+## Sync the full discovery pool
+
+```bash
+npm run sync:jobs
+```
+
+This refreshes `data/jobs.json` from the shared starter and curated discovery sources, applies the same location filter used by the UI, and writes a sync report to `data/job-sync-report.json`.
+
+Optional:
+
+```bash
+npm run sync:jobs -- --remote-mode=only
+```
+
+```bash
+npm run sync:jobs -- --remote-mode=preferred --exclude-locations=india,hyderabad,bengaluru
+```
+
+The sync script will not overwrite `data/jobs.json` with an empty result set, which makes it much safer to run on a schedule.
+
 ## Project structure
 
 - `index.html`: app shell
 - `styles.css`: visual system and responsive layout
 - `app.js`: scoring engine, local state, rendering, export
-- `data/jobs.json`: seeded roles plus imported roles
 - `data/jobs.json`: small starter set of real roles plus imported roles
+- `data/job-sync-report.json`: generated summary from the last scheduled or manual sync
+- `lib/discovery-preferences.mjs`: shared remote-mode filtering helpers
+- `lib/discovery-sources.mjs`: starter and curated discovery source lists
 - `lib/job-discovery.mjs`: ATS and job-page import + normalization
 - `scripts/fetch-jobs.mjs`: CLI importer for board and job URLs
+- `scripts/sync-jobs.mjs`: scheduled-friendly discovery sync for ongoing refreshes
 - `server.mjs`: tiny static server plus local import and PDF extraction endpoints

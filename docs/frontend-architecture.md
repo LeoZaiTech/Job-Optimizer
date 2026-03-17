@@ -48,7 +48,14 @@ The left column is input-oriented. The right side is analysis-oriented.
 
 ```js
 {
+  autoPullAttempted: false,
   customJobs: [],
+  discovery: {
+    autoPullWhenEmpty: false,
+    remoteMode: "preferred",
+    sourceUrls: []
+  },
+  importInFlight: false,
   importedJobs: [],
   importReport: null,
   jobs: [],
@@ -68,6 +75,9 @@ The left column is input-oriented. The right side is analysis-oriented.
 - `jobs`: loaded from `data/jobs.json`
 - `customJobs`: restored from `localStorage`
 - `importedJobs`: restored from `localStorage`
+- `discovery`: restored from `localStorage` for saved exact-import URLs, auto-pull behavior, and curated batch position
+- `discovery.remoteMode`: controls whether imports are remote-preferred, remote-only, or location-agnostic; the preferred mode now keeps remote roles first and only a tiny fallback slice of unclear listings
+- `discovery.excludeLocations`: comma-separated location phrases that should be filtered out of the board and new imports
 - `profile`: restored from `localStorage` with defaults
 - The profile now includes public links and pasted resume text.
 - `statuses`: restored from `localStorage`
@@ -199,6 +209,11 @@ Each render computes analyzed jobs from raw jobs plus the active profile:
 - submits pasted URLs to `POST /api/import-jobs`
 - uses `lib/job-discovery.mjs` to detect source type and normalize results
 - currently supports Greenhouse, Lever, Ashby, and direct job pages with structured data
+- remembers the last successful discovery sources for reuse
+- supports a `Pull more jobs` action that rotates through broader curated discovery batches
+- can auto-trigger one more import when active leads reach zero if that setting is enabled
+- applies the selected location mode before imported roles are merged into state
+- filters out excluded location phrases before imported roles are merged into state
 - filters imported records down to mobile-relevant roles before adding them to state
 - persists imported jobs into `localStorage`
 - stores the latest import summary in `importReport`
@@ -214,6 +229,7 @@ Each render computes analyzed jobs from raw jobs plus the active profile:
 ### Filters
 
 - update in-memory filter state only
+- switch the board between `Active leads`, `All synced roles`, and `Reference only`
 - narrow the rendered list without changing stored data
 
 ### Status updates
@@ -221,6 +237,7 @@ Each render computes analyzed jobs from raw jobs plus the active profile:
 - change a job's pipeline state
 - persist into `localStorage`
 - affect queue composition and filtering
+- move `Apply next` jobs out of the default Ranked Leads list and into the queue
 - move `Applied` and `Archived` jobs into the Reference Shelf while keeping them selectable
 
 ### Search recipe buttons
@@ -236,8 +253,9 @@ Each render computes analyzed jobs from raw jobs plus the active profile:
 
 There is no server-side persistence.
 
-Browser persistence is split across four `localStorage` keys:
+Browser persistence is split across five `localStorage` keys:
 
+- `job-optimizer-discovery-settings`
 - `job-optimizer-profile`
 - `job-optimizer-custom-jobs`
 - `job-optimizer-imported-jobs`
@@ -264,8 +282,12 @@ There is no application backend yet. The only Node-side logic today is:
 - `server.mjs` for serving static files
 - `server.mjs` also exposes a local PDF extraction endpoint for resume imports
 - `server.mjs` exposes `POST /api/import-jobs` for ATS and direct job imports
+- `lib/discovery-sources.mjs` holds the shared starter and curated discovery source lists
+- `lib/discovery-preferences.mjs` holds the shared location-mode filtering logic
 - `lib/job-discovery.mjs` holds source detection, ATS fetches, normalization, and relevance filtering
+- ATS pulls now fan out across sources in parallel and use request timeouts
 - `scripts/fetch-jobs.mjs` is the CLI wrapper around that same importer logic
+- `scripts/sync-jobs.mjs` refreshes the full discovery pool into `data/jobs.json` for scheduled automation
 
 ## Practical next refactor points
 

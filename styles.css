@@ -175,6 +175,7 @@ a {
 .queue-head,
 .queue-item,
 .detail-actions,
+.section-actions,
 .filters-row,
 .job-meta-row,
 .metric-card,
@@ -189,6 +190,12 @@ a {
 .detail-actions {
   justify-content: space-between;
   align-items: start;
+}
+
+.section-actions {
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .compact {
@@ -389,6 +396,39 @@ textarea {
   margin-top: 14px;
 }
 
+.history-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.history-group {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.history-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+}
+
+.history-group-head p {
+  margin: 6px 0 0;
+}
+
+.history-scroller {
+  display: grid;
+  gap: 14px;
+  max-height: 320px;
+  overflow: auto;
+  padding-right: 6px;
+}
+
+.history-empty {
+  padding: 16px;
+}
+
 .queue-item {
   justify-content: space-between;
   padding: 14px 16px;
@@ -426,6 +466,11 @@ textarea {
 
 .filters-search {
   flex: 2 1 280px;
+}
+
+#jobCount {
+  margin: 0;
+  text-align: right;
 }
 
 .board-panel,

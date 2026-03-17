@@ -19,11 +19,12 @@ Right now, it is a local-first prototype for the "find and qualify" part of the 
 - Shows a ranked board, fit buckets, an `Apply next` queue, and job detail guidance
 - Generates search recipes for LinkedIn, Google, Greenhouse, and Lever
 - Exports a shortlist
+- Includes a scheduled-friendly sync script that can refresh the broader discovery pool into `data/jobs.json`
 
 ### What is still placeholder or incomplete
 
 - `data/jobs.json` now holds a small live starter snapshot, but it will age without refresh
-- Live discovery still depends on URLs you paste in rather than automatic crawling or saved-search sync
+- Live discovery in the browser still depends on URLs you paste in or the built-in source pool rather than saved-search sync
 - The app does not auto-apply yet
 - It does not enrich your profile from LinkedIn or GitHub automatically
 - Resume parsing is still lightweight keyword extraction, not deep resume understanding
@@ -79,7 +80,7 @@ For strong matches, the app should help prepare and optionally automate:
 
 ### Recommended build order
 
-1. Expand live discovery beyond pasted URLs
+1. Put the new discovery sync on a schedule
 2. Better matching and normalization
 3. Tailored resume and pitch generation
 4. Safe browser automation with review before submit

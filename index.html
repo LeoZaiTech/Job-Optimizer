@@ -167,6 +167,23 @@
                   placeholder="https://boards.greenhouse.io/company&#10;https://jobs.lever.co/company&#10;https://jobs.ashbyhq.com/company&#10;https://boards.greenhouse.io/company/jobs/1234567"
                 ></textarea>
               </label>
+              <label>
+                <span>Location mode</span>
+                <select id="remoteModeSelect" name="remoteMode">
+                  <option value="preferred">Remote preferred</option>
+                  <option value="only">Remote only</option>
+                  <option value="any">Any location</option>
+                </select>
+              </label>
+              <label class="field-span">
+                <span>Exclude locations</span>
+                <input
+                  id="excludeLocationsInput"
+                  name="excludeLocations"
+                  type="text"
+                  placeholder="India, Hyderabad, Bengaluru"
+                />
+              </label>
               <button id="loadStarterJobs" class="button ghost" type="button">
                 Load starter jobs
               </button>
@@ -174,6 +191,10 @@
               <button id="clearImportedJobs" class="button ghost" type="button">
                 Clear imported
               </button>
+              <label class="toggle field-span">
+                <input id="autoPullToggle" name="autoPullWhenEmpty" type="checkbox" />
+                <span>Auto-pull when active leads hit zero</span>
+              </label>
             </form>
 
             <div class="chip-row import-supported">
@@ -265,6 +286,14 @@
 
             <form id="filtersForm" class="filters-row">
               <label>
+                <span>View</span>
+                <select name="view">
+                  <option value="active">Active leads</option>
+                  <option value="all">All synced roles</option>
+                  <option value="reference">Reference only</option>
+                </select>
+              </label>
+              <label>
                 <span>Fit</span>
                 <select name="fit">
                   <option value="all">All fits</option>
@@ -277,7 +306,7 @@
               <label>
                 <span>Status</span>
                 <select name="status">
-                  <option value="all">All statuses</option>
+                  <option value="all">All in view</option>
                   <option value="saved">Saved</option>
                   <option value="apply-next">Apply next</option>
                   <option value="applied">Applied</option>
@@ -314,7 +343,12 @@
                   <p class="eyebrow">Ranked leads</p>
                   <h2>Jobs</h2>
                 </div>
-                <p id="jobCount" class="muted"></p>
+                <div class="section-actions">
+                  <button id="pullMoreJobs" class="button ghost" type="button">
+                    Pull more jobs
+                  </button>
+                  <p id="jobCount" class="muted"></p>
+                </div>
               </div>
               <div id="jobList" class="job-list"></div>
             </section>
