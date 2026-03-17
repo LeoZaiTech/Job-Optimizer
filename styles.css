@@ -414,6 +414,13 @@ textarea {
   margin-top: 14px;
 }
 
+.automation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
 .automation-command {
   margin-top: 12px;
 }
@@ -471,6 +478,11 @@ textarea {
 .job-card:hover {
   border-color: rgba(20, 108, 98, 0.34);
   transform: translateY(-1px);
+}
+
+.queue-item.is-selected {
+  border-color: rgba(20, 108, 98, 0.5);
+  box-shadow: 0 10px 30px rgba(20, 108, 98, 0.12);
 }
 
 .queue-item p,

@@ -245,7 +245,7 @@ async function fillGreenhouseApplication(page, candidateDefaults, jobReport) {
       value: candidate.currentLocation
     },
     jobReport,
-    { matchMode: "location" }
+    { ignoreIfMissing: true, matchMode: "location" }
   );
 
   await fillGreenhouseField(
@@ -313,6 +313,7 @@ async function fillGreenhouseApplication(page, candidateDefaults, jobReport) {
   }
 
   await fillGreenhouseSavedAnswers(page, candidate.applicationAnswers, jobReport);
+  await fillGreenhouseConsentCheckboxes(page, jobReport);
   await page.waitForTimeout(300);
   jobReport.unmatchedQuestions = reconcileGreenhouseQuestions(
     await collectUnmatchedGreenhouseQuestions(page),
@@ -332,7 +333,7 @@ async function fillGreenhouseField(page, field, jobReport, options = {}) {
 
   const input = await findGreenhouseFieldInput(page, selectors, labels);
   if (!input) {
-    if (!options.optional) {
+    if (!options.optional && !options.ignoreIfMissing) {
       pushUnique(jobReport.fieldsMissing, `${name}: no matching input found`);
     }
     return;
@@ -527,6 +528,56 @@ async function fillGreenhouseCheckboxQuestion(page, groupPattern, answerOptions,
   }
 
   pushUnique(jobReport.fieldsMissing, `${fieldName}: no matching checkbox option found`);
+}
+
+async function fillGreenhouseConsentCheckboxes(page, jobReport) {
+  const labels = page.locator("label");
+  const labelCount = await labels.count();
+
+  for (let index = 0; index < labelCount; index += 1) {
+    const label = labels.nth(index);
+    const labelText = String((await label.textContent()) || "").replace(/\s+/g, " ").trim();
+    if (!looksLikeRequiredConsentLabel(labelText)) {
+      continue;
+    }
+
+    const checkbox = await findCheckboxForLabel(page, label);
+    if (!checkbox) {
+      continue;
+    }
+
+    if (await checkbox.isChecked().catch(() => false)) {
+      pushUnique(jobReport.fieldsFilled, "required consent");
+      continue;
+    }
+
+    try {
+      await label.click();
+    } catch (error) {
+      await checkbox.check().catch(() => {});
+    }
+
+    if (await checkbox.isChecked().catch(() => false)) {
+      pushUnique(jobReport.fieldsFilled, "required consent");
+    }
+  }
+}
+
+async function findCheckboxForLabel(page, label) {
+  const forId = await label.getAttribute("for");
+  if (forId) {
+    const checkbox = page.locator(`#${forId}`).first();
+    if (await checkbox.count()) {
+      return checkbox;
+    }
+  }
+
+  const nestedCheckbox = label.locator("input[type='checkbox']").first();
+  if (await nestedCheckbox.count()) {
+    return nestedCheckbox;
+  }
+
+  return null;
 }
 
 async function findGreenhouseFieldInput(page, selectors, labels) {
@@ -1162,6 +1213,22 @@ function defaultHearAboutDetail(value) {
   }
 
   return "";
+}
+
+function looksLikeRequiredConsentLabel(labelText) {
+  const normalized = cleanValue(labelText).toLowerCase();
+  if (!normalized || !normalized.includes("*")) {
+    return false;
+  }
+
+  return (
+    normalized.includes("agree") &&
+    (normalized.includes("store and process my data") ||
+      normalized.includes("process my data") ||
+      normalized.includes("privacy") ||
+      normalized.includes("eligibility regarding my current application") ||
+      normalized.includes("considering my eligibility"))
+  );
 }
 
 function escapeRegex(value) {

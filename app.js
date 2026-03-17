@@ -16,8 +16,18 @@ const STORAGE_KEYS = {
   discovery: "job-optimizer-discovery-settings",
   importedJobs: "job-optimizer-imported-jobs",
   profile: "job-optimizer-profile",
+  statusMigrations: "job-optimizer-status-migrations",
   statuses: "job-optimizer-statuses"
 };
+
+const STATUS_MIGRATIONS = [
+  {
+    from: "apply-next",
+    id: "move-fueled-greenhouse-to-applied-20260317",
+    jobId: "greenhouse-fueledcareers-5134378008",
+    to: "applied"
+  }
+];
 
 const DEFAULT_PROFILE = {
   answerAgencyExperience: "",
@@ -115,6 +125,7 @@ const state = {
   jobs: [],
   profile: { ...DEFAULT_PROFILE },
   selectedJobId: null,
+  statusMigrations: {},
   statuses: {},
   filters: {
     fit: "all",
@@ -188,7 +199,9 @@ function restoreState() {
   };
   state.customJobs = readJson(STORAGE_KEYS.customJobs, []);
   state.importedJobs = readJson(STORAGE_KEYS.importedJobs, []);
+  state.statusMigrations = readJson(STORAGE_KEYS.statusMigrations, {});
   state.statuses = readJson(STORAGE_KEYS.statuses, {});
+  applyOneTimeStatusMigrations();
 }
 
 async function loadSeedJobs() {
@@ -224,6 +237,7 @@ function bindEvents() {
   elements.jobDetail.addEventListener("click", handleDetailClick);
   elements.jobDetail.addEventListener("change", handleDetailChange);
   elements.searchRecipes.addEventListener("click", handleRecipeClick);
+  elements.automationSummary.addEventListener("click", handleAutomationAction);
   elements.exportQueue.addEventListener("click", exportQueue);
   elements.resumeFile.addEventListener("change", handleResumeUpload);
 }
@@ -469,6 +483,51 @@ function handleDetailClick(event) {
   if (action === "open-job" && analyzedJob.url && !isSampleJob(analyzedJob)) {
     window.open(analyzedJob.url, "_blank", "noopener,noreferrer");
   }
+
+  if (action === "mark-applied") {
+    updateJobStatus(jobId, "applied");
+    showFlash("Moved this role into Applied.");
+  }
+}
+
+function handleAutomationAction(event) {
+  const button = event.target.closest("[data-automation-action]");
+  if (!button) {
+    return;
+  }
+
+  const action = button.getAttribute("data-automation-action");
+  const queue = buildApplyQueue(analyzedJobs());
+  const selectedStatus = currentStatus(state.selectedJobId);
+
+  if (action === "mark-selected-applied") {
+    if (!state.selectedJobId || selectedStatus !== "apply-next") {
+      showFlash("Select an Apply next role first.");
+      return;
+    }
+
+    updateJobStatus(state.selectedJobId, "applied");
+    showFlash("Selected Apply next role moved into Applied.");
+    return;
+  }
+
+  if (action === "mark-greenhouse-applied") {
+    const greenhouseJobIds = queue
+      .filter((job) => applicationAutomationForJob(job).adapter === "greenhouse")
+      .map((job) => job.id);
+
+    if (greenhouseJobIds.length === 0) {
+      showFlash("There are no Greenhouse roles in Apply next right now.");
+      return;
+    }
+
+    updateManyJobStatuses(greenhouseJobIds, "applied");
+    showFlash(
+      `Moved ${greenhouseJobIds.length} Greenhouse Apply next role${
+        greenhouseJobIds.length === 1 ? "" : "s"
+      } into Applied.`
+    );
+  }
 }
 
 function handleDetailChange(event) {
@@ -478,8 +537,7 @@ function handleDetailChange(event) {
   }
 
   const jobId = select.getAttribute("data-status-select");
-  state.statuses[jobId] = select.value;
-  writeJson(STORAGE_KEYS.statuses, state.statuses);
+  updateJobStatus(jobId, select.value, { renderAfter: false });
   render();
 }
 
@@ -493,6 +551,34 @@ function handleRecipeClick(event) {
   if (url) {
     window.open(url, "_blank", "noopener,noreferrer");
   }
+}
+
+function applyOneTimeStatusMigrations() {
+  let changed = false;
+
+  STATUS_MIGRATIONS.forEach((migration) => {
+    if (state.statusMigrations[migration.id]) {
+      return;
+    }
+
+    const current = state.statuses[migration.jobId];
+    if (current === migration.from) {
+      state.statuses[migration.jobId] = migration.to;
+      changed = true;
+    }
+
+    if (current === migration.from || current === migration.to) {
+      state.statusMigrations[migration.id] = true;
+      changed = true;
+    }
+  });
+
+  if (!changed) {
+    return;
+  }
+
+  writeJson(STORAGE_KEYS.statuses, state.statuses);
+  writeJson(STORAGE_KEYS.statusMigrations, state.statusMigrations);
 }
 
 function render() {
@@ -816,7 +902,9 @@ function renderSnapshot() {
       ? applyQueue
           .map(
             (job) => `
-              <button class="queue-item" type="button" data-job-id="${escapeHtml(job.id)}">
+              <button class="queue-item ${job.id === state.selectedJobId ? "is-selected" : ""}" type="button" data-job-id="${escapeHtml(
+                job.id
+              )}">
                 <div>
                   <strong>${escapeHtml(job.title)}</strong>
                   <p>${escapeHtml(job.company)} · ${escapeHtml(job.location)}</p>
@@ -919,7 +1007,9 @@ function renderJobList() {
   const referenceCount = historyJobs().length;
   const stats = boardStats();
   const preserveSelection = analyzedJobs().some(
-    (job) => job.id === state.selectedJobId && isReferenceStatus(currentStatus(job.id))
+    (job) =>
+      job.id === state.selectedJobId &&
+      (isReferenceStatus(currentStatus(job.id)) || currentStatus(job.id) === "apply-next")
   );
 
   if (!preserveSelection && !jobs.some((job) => job.id === state.selectedJobId) && jobs[0]) {
@@ -1004,6 +1094,13 @@ function renderJobDetail() {
         <button class="button ghost" type="button" data-action="copy-pitch" data-job-id="${escapeHtml(
           job.id
         )}">Copy pitch</button>
+        ${
+          currentStatus(job.id) === "apply-next"
+            ? `<button class="button ghost" type="button" data-action="mark-applied" data-job-id="${escapeHtml(
+                job.id
+              )}">Mark applied</button>`
+            : ""
+        }
       </div>
     </div>
 
@@ -1531,6 +1628,9 @@ function buildAutomationSummary(applyQueue) {
   ]);
   const adapterChips = summarizeAutomationAdapters(adapterBreakdown);
   const warnings = automationProfileWarnings(state.profile);
+  const selectedReadyForApplied =
+    state.selectedJobId && currentStatus(state.selectedJobId) === "apply-next";
+  const greenhouseQueuedCount = readyJobs.filter(({ automation }) => automation.adapter === "greenhouse").length;
 
   return `
     <div class="profile-signal-grid">
@@ -1574,6 +1674,28 @@ function buildAutomationSummary(applyQueue) {
             ? `<p class="mini-note">Automation warning${warnings.length === 1 ? "" : "s"}: ${escapeHtml(
                 warnings.join(" ")
               )}</p>`
+            : ""
+        }
+        ${
+          applyQueue.length > 0
+            ? `<div class="automation-actions">
+                <button
+                  class="button ghost"
+                  type="button"
+                  data-automation-action="mark-selected-applied"
+                  ${selectedReadyForApplied ? "" : "disabled"}
+                >
+                  Mark selected Applied
+                </button>
+                <button
+                  class="button ghost"
+                  type="button"
+                  data-automation-action="mark-greenhouse-applied"
+                  ${greenhouseQueuedCount > 0 ? "" : "disabled"}
+                >
+                  Mark Greenhouse queue Applied
+                </button>
+              </div>`
             : ""
         }
       </article>
@@ -1806,6 +1928,36 @@ function fitLabel(fitBucket) {
 
 function currentStatus(jobId) {
   return state.statuses[jobId] || "saved";
+}
+
+function updateJobStatus(jobId, status, options = {}) {
+  const { renderAfter = true } = options;
+  if (!jobId) {
+    return;
+  }
+
+  state.statuses[jobId] = status;
+  writeJson(STORAGE_KEYS.statuses, state.statuses);
+
+  if (renderAfter) {
+    render();
+  }
+}
+
+function updateManyJobStatuses(jobIds, status, options = {}) {
+  const uniqueJobIds = Array.from(new Set(jobIds.filter(Boolean)));
+  if (uniqueJobIds.length === 0) {
+    return;
+  }
+
+  uniqueJobIds.forEach((jobId) => {
+    state.statuses[jobId] = status;
+  });
+  writeJson(STORAGE_KEYS.statuses, state.statuses);
+
+  if (options.renderAfter !== false) {
+    render();
+  }
 }
 
 function currentStatusLabel(jobId) {

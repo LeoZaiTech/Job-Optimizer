@@ -1,220 +1,179 @@
 {
-  "excludedLocationCount": 15,
-  "excludedLocations": [
-    "india",
-    "hyderabad",
-    "bengaluru"
-  ],
-  "syncedAt": "2026-03-17T03:52:07.483Z",
+  "excludedLocationCount": 0,
+  "excludedLocations": [],
+  "syncedAt": "2026-03-17T13:00:34.132Z",
   "remoteMode": "preferred",
   "remoteModeLabel": "Remote preferred",
   "sourceCount": 41,
   "sourceErrors": [
     {
-      "error": "Fetch timed out for https://api.lever.co/v0/postings/USMobile?mode=json",
+      "error": "fetch failed",
+      "input": "https://jobs.ashbyhq.com/Nash/dc9645ae-dab2-4ed1-8db4-b06ae790f747"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.ashbyhq.com/partiful/0a8ff10d-0adb-4978-830b-f2901321302c"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/filevine/1935eaab-1536-442f-9b55-0110ce6abe3a"
+    },
+    {
+      "error": "fetch failed",
       "input": "https://jobs.lever.co/USMobile/5c7bd7b9-477a-4006-b766-486eb81bead2"
     },
     {
-      "error": "The operation was aborted due to timeout",
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/wahed.com/11dae8eb-7800-42c6-b9b0-a19690a167a1"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://boards.greenhouse.io/embed/job_board?for=bitso"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/wahed.com"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/wilburlabs"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/Fliff"
+    },
+    {
+      "error": "fetch failed",
       "input": "https://jobs.lever.co/bluelightconsulting?department=Engineering"
     },
     {
-      "error": "The operation was aborted due to timeout",
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/Zeller"
+    },
+    {
+      "error": "fetch failed",
       "input": "https://jobs.lever.co/theodo"
     },
     {
-      "error": "The operation was aborted due to timeout",
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/myollie"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/halter"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/qualysoft"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.ashbyhq.com/openai"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/bumbleinc"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://boards.greenhouse.io/fluxon"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://boards.greenhouse.io/embed/job_board?for=fanduel"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/fullspectrumsoftware"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/gradion"
+    },
+    {
+      "error": "fetch failed",
       "input": "https://jobs.lever.co/ciandt"
     },
     {
-      "error": "The operation was aborted due to timeout",
+      "error": "fetch failed",
       "input": "https://jobs.lever.co/filevine"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/zartis"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/USMobile"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.ashbyhq.com/Nash"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.ashbyhq.com/partiful"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/pennylane"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://boards.greenhouse.io/embed/job_board?for=companycam"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.ashbyhq.com/halter"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.ashbyhq.com/frontcareers"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.ashbyhq.com/backpack"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.ashbyhq.com/Abridge"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/idt"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/remedyproductstudio"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/luxurypresence"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://jobs.lever.co/smart-working-solutions"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://boards.greenhouse.io/embed/job_board?for=skillzinc"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://boards.greenhouse.io/embed/job_board?for=gympass"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://boards.greenhouse.io/embed/job_board?for=vividseatsllc"
+    },
+    {
+      "error": "fetch failed",
+      "input": "https://boards.greenhouse.io/embed/job_board?for=Chime"
     }
   ],
-  "sourceSummaries": [
-    {
-      "importedCount": 1,
-      "input": "https://jobs.ashbyhq.com/Nash/dc9645ae-dab2-4ed1-8db4-b06ae790f747",
-      "sourceType": "ashby"
-    },
-    {
-      "importedCount": 1,
-      "input": "https://jobs.ashbyhq.com/partiful/0a8ff10d-0adb-4978-830b-f2901321302c",
-      "sourceType": "ashby"
-    },
-    {
-      "importedCount": 1,
-      "input": "https://jobs.lever.co/filevine/1935eaab-1536-442f-9b55-0110ce6abe3a",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 1,
-      "input": "https://jobs.lever.co/wahed.com/11dae8eb-7800-42c6-b9b0-a19690a167a1",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 1,
-      "input": "https://boards.greenhouse.io/embed/job_board?for=bitso",
-      "sourceType": "greenhouse"
-    },
-    {
-      "importedCount": 1,
-      "input": "https://jobs.lever.co/wahed.com",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 0,
-      "input": "https://jobs.lever.co/wilburlabs",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 1,
-      "input": "https://jobs.lever.co/Fliff",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 2,
-      "input": "https://jobs.lever.co/Zeller",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 0,
-      "input": "https://jobs.lever.co/myollie",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 0,
-      "input": "https://jobs.lever.co/halter",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 1,
-      "input": "https://jobs.lever.co/qualysoft",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 9,
-      "input": "https://jobs.ashbyhq.com/openai",
-      "sourceType": "ashby"
-    },
-    {
-      "importedCount": 4,
-      "input": "https://jobs.lever.co/bumbleinc",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 10,
-      "input": "https://boards.greenhouse.io/fluxon",
-      "sourceType": "greenhouse"
-    },
-    {
-      "importedCount": 7,
-      "input": "https://boards.greenhouse.io/embed/job_board?for=fanduel",
-      "sourceType": "greenhouse"
-    },
-    {
-      "importedCount": 1,
-      "input": "https://jobs.lever.co/fullspectrumsoftware",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 0,
-      "input": "https://jobs.lever.co/gradion",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 1,
-      "input": "https://jobs.lever.co/zartis",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 1,
-      "input": "https://jobs.lever.co/USMobile",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 1,
-      "input": "https://jobs.ashbyhq.com/Nash",
-      "sourceType": "ashby"
-    },
-    {
-      "importedCount": 5,
-      "input": "https://jobs.ashbyhq.com/partiful",
-      "sourceType": "ashby"
-    },
-    {
-      "importedCount": 0,
-      "input": "https://jobs.lever.co/pennylane",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 0,
-      "input": "https://boards.greenhouse.io/embed/job_board?for=companycam",
-      "sourceType": "greenhouse"
-    },
-    {
-      "importedCount": 3,
-      "input": "https://jobs.ashbyhq.com/halter",
-      "sourceType": "ashby"
-    },
-    {
-      "importedCount": 2,
-      "input": "https://jobs.ashbyhq.com/frontcareers",
-      "sourceType": "ashby"
-    },
-    {
-      "importedCount": 1,
-      "input": "https://jobs.ashbyhq.com/backpack",
-      "sourceType": "ashby"
-    },
-    {
-      "importedCount": 1,
-      "input": "https://jobs.ashbyhq.com/Abridge",
-      "sourceType": "ashby"
-    },
-    {
-      "importedCount": 4,
-      "input": "https://jobs.lever.co/idt",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 2,
-      "input": "https://jobs.lever.co/remedyproductstudio",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 0,
-      "input": "https://jobs.lever.co/luxurypresence",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 9,
-      "input": "https://jobs.lever.co/smart-working-solutions",
-      "sourceType": "lever"
-    },
-    {
-      "importedCount": 0,
-      "input": "https://boards.greenhouse.io/embed/job_board?for=skillzinc",
-      "sourceType": "greenhouse"
-    },
-    {
-      "importedCount": 1,
-      "input": "https://boards.greenhouse.io/embed/job_board?for=gympass",
-      "sourceType": "greenhouse"
-    },
-    {
-      "importedCount": 0,
-      "input": "https://boards.greenhouse.io/embed/job_board?for=vividseatsllc",
-      "sourceType": "greenhouse"
-    },
-    {
-      "importedCount": 1,
-      "input": "https://boards.greenhouse.io/embed/job_board?for=Chime",
-      "sourceType": "greenhouse"
-    }
-  ],
-  "totalFound": 70,
-  "totalKept": 21,
+  "sourceSummaries": [],
+  "totalFound": 0,
+  "totalKept": 0,
   "totalWritten": 21,
-  "updatedJobsFile": true
+  "updatedJobsFile": false
 }
